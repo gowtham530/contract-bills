@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SOR Manager — Full Fields</title>
+<style>
+  :root{
+    --bg1:#071226; --bg2:#041027;
+    --card: rgba(255,255,255,0.03);
+    --accent:#6ee7b7; --accent2:#7dd3fc;
+    --muted:#9fb0bf; --danger:#ff6b6b;
+    --radius:14px; --pad:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui, -apple-system, "Segoe UI", Roboto, Arial;background:
+    radial-gradient(600px 400px at 6% 8%, rgba(10,30,50,0.45), transparent 12%),
+    linear-gradient(180deg,var(--bg1),var(--bg2)); color:#eaf6f2}
+  .app{max-width:1100px;margin:24px auto;padding:18px;border-radius:18px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border:1px solid rgba(255,255,255,0.02)}
+  header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .logo{width:56px;height:56px;border-radius:12px;background:conic-gradient(from 120deg,#7dd3fc,#6ee7b7,#c084fc);display:grid;place-items:center;color:#021627;font-weight:800}
+  h1{margin:0;font-size:1.15rem}
+  .sub{color:var(--muted);font-size:0.92rem}
+  .grid{display:grid;grid-template-columns: 1fr 420px;gap:16px}
+  .card{background:var(--card);padding:var(--pad);border-radius:12px;border:1px solid rgba(255,255,255,0.02)}
+  .formGroup{margin-bottom:10px}
+  label{display:block;font-size:0.85rem;color:var(--muted);margin-bottom:6px}
+  input[type="text"], input[type="number"], textarea, select{
+    width:100%; padding:10px 12px; border-radius:10px;border:1px solid rgba(255,255,255,0.04); background:transparent; color:inherit;
+  }
+  textarea{min-height:72px;resize:vertical}
+  .row{display:flex;gap:10px}
+  .row > *{flex:1}
+  table{width:100%;border-collapse:collapse;color:#e9f6f0;font-size:0.95rem;margin-top:8px}
+  thead th{ text-align:left;padding:10px 8px;color:var(--muted);font-size:0.78rem}
+  tbody td{padding:10px 8px;border-top:1px dashed rgba(255,255,255,0.03)}
+  .btn{padding:10px 12px;border-radius:10px;border:0;cursor:pointer;font-weight:700}
+  .btn.primary{background:linear-gradient(90deg,var(--accent),var(--accent2));color:#022633}
+  .btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--accent2)}
+  .btn.warn{background:transparent;border:1px solid rgba(255,107,107,0.08);color:var(--danger)}
+  .small{font-size:0.88rem;color:var(--muted)}
+  .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+  .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:linear-gradient(90deg, rgba(110,231,183,0.06), rgba(125,211,252,0.06));color:var(--accent);font-weight:800}
+  @media (max-width:980px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div class="logo">SOR</div>
+        <div>
+          <h1>SOR Manager — Full Depot Fields</h1>
+          <div class="sub">Add / Edit / Delete depot SOR records. Data stored locally (browser). Export/Import available.</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;align-items:center">
+        <!-- Home button -->
+        <button id="homeBtn" class="btn ghost" title="Go to Home page">← Home</button>
+
+        <button id="exportBtn" class="btn ghost">Export JSON</button>
+        <label class="btn ghost" style="display:inline-flex;align-items:center;cursor:pointer">
+          Import
+          <input id="importFile" type="file" accept=".json" style="display:none" />
+        </label>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- left: list (no background image) -->
+      <section class="card">
+        <div class="row" style="margin-bottom:8px">
+         <input id="filterText" placeholder="Search by Depot (type name or part of it)..." />
+        </div>
+
+        <div style="overflow:auto;max-height:520px">
+          <table>
+            <thead>
+              <tr>
+                <th>Depot / Agency</th>
+                <th>ASOR / Distance</th>
+                <th>Receipt slabs</th>
+                <th>Transport / Supervision</th>
+                <th style="width:140px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="listBody"></tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+          <div class="small" id="countText">0 records</div>
+          <div class="small">Local only — use Export to backup</div>
+        </div>
+      </section>
+
+      <!-- right: form -->
+      <aside class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <div style="font-weight:800">Add / Edit SOR</div>
+            <div class="small">Complete the fields below and click Save Entry</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="formGroup">
+            <label for="depotName">Name of the Depot</label>
+            <input id="depotName" placeholder="e.g., FSD MG Complex" />
+          </div>
+
+          <div class="formGroup">
+            <label for="agency">Agency</label>
+            <input id="agency" placeholder="FCI/CWC/TNWC" />
+          </div>
+
+          <div class="row">
+            <div class="formGroup">
+              <label for="distance">Distance (km)</label>
+              <input id="distance" type="number" placeholder="e.g., 45" />
+            </div>
+            <div class="formGroup">
+              <label for="asor">ASOR (%)</label>
+              <input id="asor" type="number" placeholder="e.g., 2.5" />
+            </div>
+          </div>
+
+          <div class="formGroup">
+            <label for="unloading">Unloading at GS</label>
+            <input id="unloading" type="number" placeholder="e.g., 4" />
+          </div>
+
+          <div class="formGroup">
+            <label for="issues">Issues</label>
+            <input id="issues" placeholder="Enter SOR for Issues" />
+          </div>
+
+          <div class="formGroup">
+            <label>Receipt slabs (Enter Height wise SOR)</label>
+            <div class="row">
+              <div><input id="receipt10" placeholder="Receipt Upto 10" /></div>
+              <div><input id="receipt16" placeholder="Receipt Upto 16" /></div>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <div><input id="receipt20" placeholder="Receipt Upto 20" /></div>
+              <div><input id="receiptBeyond" placeholder="Receipt Beyond 20" /></div>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:8px">
+            <div class="formGroup">
+              <label for="transportation">Transportation</label>
+              <input id="transportation" placeholder="Rate of Transportation" />
+            </div>
+            <div class="formGroup">
+              <label for="supervision">Supervision</label>
+              <input id="supervision" placeholder="Supervision charges" />
+            </div>
+          </div>
+
+          <div class="formGroup">
+            <label for="note">Extra Note</label>
+            <textarea id="note" placeholder="Any additional comments"></textarea>
+          </div>
+
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <button id="saveBtn" class="btn primary">Save Entry</button>
+            <button id="cancelBtn" class="btn ghost">Cancel</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+<script>
+/* SOR Manager — full fields
+   data schema:
+   { id, depotName, agency, distance, asor, unloading, issues,
+     receipt10, receipt16, receipt20, receiptBeyond, transportation, supervision, note, createdAt }
+*/
+
+const STORAGE_KEY = 'sorData_v1';
+let data = [];
+let editingId = null;
+
+/* DOM elements */
+const depotName = document.getElementById('depotName');
+const agency = document.getElementById('agency');
+const distance = document.getElementById('distance');
+const asor = document.getElementById('asor');
+const unloading = document.getElementById('unloading');
+const issues = document.getElementById('issues');
+const receipt10 = document.getElementById('receipt10');
+const receipt16 = document.getElementById('receipt16');
+const receipt20 = document.getElementById('receipt20');
+const receiptBeyond = document.getElementById('receiptBeyond');
+const transportation = document.getElementById('transportation');
+const supervision = document.getElementById('supervision');
+const note = document.getElementById('note');
+
+const saveBtn = document.getElementById('saveBtn');
+const cancelBtn = document.getElementById('cancelBtn');
+const listBody = document.getElementById('listBody');
+const countText = document.getElementById('countText');
+const filterText = document.getElementById('filterText');
+const exportBtn = document.getElementById('exportBtn');
+const importFile = document.getElementById('importFile');
+const homeBtn = document.getElementById('homeBtn');
+
+/* storage helpers */
+function loadFromStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) { data = []; return; }
+    const parsed = JSON.parse(raw);
+    data = Array.isArray(parsed) ? parsed : [];
+  } catch(e){ console.error('load error', e); data = []; }
+}
+function saveToStorage(){
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e){ console.error('save error', e); }
+}
+
+/* render list */
+function renderList(){
+  const txt = filterText.value.trim().toLowerCase();
+  listBody.innerHTML = '';
+  const filtered = data.filter(item => {
+    // If search box is empty, include all entries
+    if (!txt) return true;
+    // Search only in depotName (case-insensitive, partial match)
+    return (item.depotName || '').toLowerCase().includes(txt);
+  });
+  if(filtered.length === 0){
+    listBody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:26px;color:var(--muted)">No records — add SOR entries on the right</td></tr>`;
+  } else {
+    filtered.forEach(item=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:800">${escapeHtml(item.depotName)}</div>
+          <div class="small" style="margin-top:6px">${escapeHtml(item.agency || '')}</div>
+        </td>
+        <td>
+          <div class="small">ASOR: <span class="pill">${Number(item.asor||0).toFixed(2)}%</span></div>
+          <div class="small" style="margin-top:6px">Distance: ${escapeHtml(item.distance||'—')} km</div>
+        </td>
+        <td>
+          <div class="small">Upto10: ${escapeHtml(item.receipt10||'—')}</div>
+          <div class="small">Upto16: ${escapeHtml(item.receipt16||'—')}</div>
+          <div class="small">Upto20: ${escapeHtml(item.receipt20||'—')}</div>
+          <div class="small">Beyond20: ${escapeHtml(item.receiptBeyond||'—')}</div>
+        </td>
+        <td>
+          <div class="small">Transport: ${escapeHtml(item.transportation||'—')}</div>
+          <div class="small" style="margin-top:6px">Supervision: ${escapeHtml(item.supervision||'—')}</div>
+        </td>
+        <td>
+          <button class="btn ghost" data-id="${item.id}" data-action="edit">Edit</button>
+          <button class="btn warn" style="margin-top:8px" data-id="${item.id}" data-action="delete">Delete</button>
+        </td>
+      `;
+      listBody.appendChild(tr);
+    });
+  }
+  countText.textContent = filtered.length + ' records';
+  attachRowActions();
+}
+
+function attachRowActions(){
+  listBody.querySelectorAll('button[data-action]').forEach(b=>{
+    b.onclick = ()=> {
+      const id = b.getAttribute('data-id');
+      const action = b.getAttribute('data-action');
+      if(action === 'edit') startEdit(id);
+      if(action === 'delete') {
+        if(confirm('Delete this SOR entry? This cannot be undone.')) deleteEntry(id);
+      }
+    }
+  });
+}
+
+/* CRUD */
+function createEntry(obj){
+  obj.id = 'sor_' + Date.now() + '_' + Math.floor(Math.random()*9999);
+  obj.createdAt = Date.now();
+  data.unshift(obj);
+  saveToStorage();
+  renderList();
+  clearForm();
+}
+function updateEntry(id, values){
+  const idx = data.findIndex(d=>d.id===id);
+  if(idx===-1) return;
+  data[idx] = {...data[idx], ...values};
+  saveToStorage();
+  renderList();
+  clearForm();
+  editingId = null;
+  saveBtn.textContent = 'Save Entry';
+}
+function deleteEntry(id){
+  data = data.filter(d=>d.id !== id);
+  saveToStorage();
+  renderList();
+}
+
+/* edit */
+function startEdit(id){
+  const item = data.find(d=>d.id===id);
+  if(!item) return;
+  editingId = id;
+  depotName.value = item.depotName || '';
+  agency.value = item.agency || '';
+  distance.value = item.distance || '';
+  asor.value = item.asor || '';
+  unloading.value = item.unloading || '';
+  issues.value = item.issues || '';
+  receipt10.value = item.receipt10 || '';
+  receipt16.value = item.receipt16 || '';
+  receipt20.value = item.receipt20 || '';
+  receiptBeyond.value = item.receiptBeyond || '';
+  transportation.value = item.transportation || '';
+  supervision.value = item.supervision || '';
+  note.value = item.note || '';
+  saveBtn.textContent = 'Update Entry';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* clear */
+function clearForm(){
+  depotName.value = '';
+  agency.value = '';
+  distance.value = '';
+  asor.value = '';
+  unloading.value = '';
+  issues.value = '';
+  receipt10.value = '';
+  receipt16.value = '';
+  receipt20.value = '';
+  receiptBeyond.value = '';
+  transportation.value = '';
+  supervision.value = '';
+  note.value = '';
+  editingId = null;
+  saveBtn.textContent = 'Save Entry';
+}
+
+/* helpers */
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function isNumber(v){ return v !== '' && !isNaN(Number(v)); }
+
+/* events */
+saveBtn.addEventListener('click', ()=>{
+  const dName = depotName.value.trim();
+  const ag = agency.value.trim();
+  const dist = distance.value.trim();
+  const a = asor.value.trim();
+  // validation
+  if(!dName){ alert('Please enter Depot name'); depotName.focus(); return; }
+  if(!ag){ alert('Please enter Agency'); agency.focus(); return; }
+  if(!isNumber(a)){ alert('Enter valid ASOR percentage'); asor.focus(); return; }
+
+  const payload = {
+    depotName: dName,
+    agency: ag,
+    distance: dist,
+    asor: parseFloat(a),
+    unloading: unloading.value.trim(),
+    issues: issues.value.trim(),
+    receipt10: receipt10.value.trim(),
+    receipt16: receipt16.value.trim(),
+    receipt20: receipt20.value.trim(),
+    receiptBeyond: receiptBeyond.value.trim(),
+    transportation: transportation.value.trim(),
+    supervision: supervision.value.trim(),
+    note: note.value.trim()
+  };
+
+  if(editingId){
+    updateEntry(editingId, payload);
+  } else {
+    createEntry(payload);
+  }
+});
+
+cancelBtn.addEventListener('click', clearForm);
+
+/* filter/search */
+filterText.addEventListener('input', renderList);
+
+/* export/import */
+exportBtn.addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='sor_data.json'; a.click();
+  URL.revokeObjectURL(url);
+});
+
+importFile.addEventListener('change', function(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    try {
+      const parsed = JSON.parse(reader.result);
+      if(!Array.isArray(parsed)) throw new Error('JSON must be an array of entries');
+      if(!confirm('Import will append entries to existing data. Continue?')) return;
+      parsed.forEach(p=>{
+        if(p.depotName && p.agency){
+          p.id = p.id || ('sor_imp_' + Date.now() + Math.floor(Math.random()*9999));
+          p.createdAt = p.createdAt || Date.now();
+          data.unshift(p);
+        }
+      });
+      saveToStorage();
+      renderList();
+      alert('Import completed.');
+    } catch(err){ alert('Import failed: ' + err.message); }
+  };
+  reader.readAsText(f);
+  e.target.value = '';
+});
+
+/* Home button */
+homeBtn.addEventListener('click', ()=>{
+  try {
+    location.href = 'index.html';
+  } catch (e) {
+    history.back();
+  }
+});
+
+/* init */
+loadFromStorage();
+renderList();
+
+/* listen for storage changes in other tabs to refresh UI */
+window.addEventListener('storage', ()=>{
+  loadFromStorage();
+  renderList();
+});
+</script>
+</body>
+</html>

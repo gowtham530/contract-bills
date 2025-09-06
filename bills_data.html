@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Bills Data — Management (minimal)</title>
+<style>
+.homeBtn{
+  display:inline-block;
+  margin:0;
+  padding:6px 12px;
+  border-radius:8px;
+  background:linear-gradient(90deg,#7EE7C6,#B78CFF);
+  color:#042b28;
+  font-weight:700;
+  text-decoration:none;
+}
+.homeBtn:hover{opacity:0.85}
+  :root{--bg1:#071226;--bg2:#041827;--muted:#9fb0bf;--accent:#7dd3fc;--danger:#ff6b6b}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial;color:#eaf6f2;
+       background:linear-gradient(180deg,var(--bg1),var(--bg2));padding:22px}
+  .wrap{max-width:1200px;margin:0 auto;background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
+        padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.02)}
+  h1{margin:0 0 14px 0;font-weight:900}
+  .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+  button{padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:800}
+  .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--accent)}
+  .controls{display:flex;gap:8px;margin-left:auto}
+  input[type="search"], select { padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04); background:transparent;color:inherit }
+  table{width:100%;border-collapse:collapse;margin-top:12px}
+  thead th{ text-align:left;padding:10px 8px;color:var(--muted);font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.03)}
+  tbody td{padding:10px 8px;border-top:1px dashed rgba(255,255,255,0.02);vertical-align:top}
+  .muted{color:var(--muted)}
+  .pill{background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:8px}
+  .small{font-size:0.9rem;color:var(--muted)}
+  .actions{display:flex;gap:6px}
+  .right{width:340px;position:sticky;top:22px;align-self:start}
+  .center{display:flex;align-items:center;gap:8px}
+  .note{margin-top:8px;color:#bcd;font-size:0.9rem}
+  .clickable-row { cursor:pointer; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Bills Data — Management</h1>
+
+    <div class="toolbar">
+      <a href="index.html" class="homeBtn" title="Home">← Home</a>
+
+      <div style="display:flex;gap:8px;align-items:center;margin-left:8px">
+        <label class="small muted" style="margin-right:6px">Search:</label>
+        <input id="searchText" type="search" placeholder="Search bill no or depot" />
+      </div>
+
+      <div class="controls">
+        <button id="exportCsv" class="btn-ghost">Export CSV</button>
+        <button id="exportJson" class="btn-ghost">Export JSON</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:16px">
+      <div>
+        <table id="billsTable" aria-live="polite">
+          <thead>
+            <tr>
+              <th style="width:34px">#</th>
+              <th>Bill No</th>
+              <th>Depot</th>
+              <th>Saved At</th>
+              <th style="text-align:right">Nett Amount</th>
+            </tr>
+          </thead>
+          <tbody id="billsBody">
+            <tr><td colspan="5" class="muted">No bills found</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <aside class="right">
+        <div style="font-weight:800">Quick tips</div>
+        <div class="note">Click any row to open that bill in the Calculator (opens in new tab). Use Export to download CSV/JSON backups. Search helps you find a bill quickly.</div>
+      </aside>
+    </div>
+  </div>
+
+<script>
+/* Minimal Bills Data screen:
+   - Reads/writes from localStorage key 'bills' (same key used by bills_calc.html).
+   - Clicking a row sets localStorage 'bill_to_open' and opens bills_calc.html so it can auto-load.
+   - Search box filters rows client-side.
+   - Only Export buttons retained (CSV/JSON).
+*/
+
+const BILLS_KEY = 'bills';
+const OPEN_KEY = 'bill_to_open';
+
+function loadBills(){ try { return JSON.parse(localStorage.getItem(BILLS_KEY) || '[]'); } catch(e){ return []; } }
+function saveBills(arr){ localStorage.setItem(BILLS_KEY, JSON.stringify(arr)); }
+
+const billsBody = document.getElementById('billsBody');
+const searchText = document.getElementById('searchText');
+const exportCsvBtn = document.getElementById('exportCsv');
+const exportJsonBtn = document.getElementById('exportJson');
+
+function fmtDate(iso){ if(!iso) return '—'; try { return new Date(iso).toLocaleString(); } catch(e){ return iso; } }
+function amountDisplay(v){ const n = Number(String(v||0).replace(/,/g,'')); if(!isFinite(n)) return '0.00'; return n.toFixed(2); }
+
+function renderList(){
+  const all = loadBills();
+  const q = (searchText.value || '').toLowerCase().trim();
+  const rows = all.map((b, idx) => ({b, idx})).filter(({b})=>{
+    if(!q) return true;
+    return (String(b.A2||'') + ' ' + String(b.A1||'') + ' ' + String(b.A46||'')).toLowerCase().includes(q);
+  });
+
+  billsBody.innerHTML = '';
+  if(rows.length === 0){
+    billsBody.innerHTML = '<tr><td colspan="5" class="muted">No bills found</td></tr>';
+    return;
+  }
+
+  rows.forEach(({b, idx}, i) => {
+    const tr = document.createElement('tr');
+    tr.className = 'clickable-row';
+    tr.dataset.idx = idx;
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td style="font-weight:700">${escapeHtml(b.A2||'—')}</td>
+      <td>${escapeHtml(b.A1||'—')}</td>
+      <td class="small">${fmtDate(b.savedAt||'')}</td>
+      <td style="text-align:right">₹ ${amountDisplay(b.A46)}</td>
+    `;
+    // click to open in calculator (open in new tab)
+    tr.addEventListener('click', ()=> {
+      localStorage.setItem(OPEN_KEY, JSON.stringify({ idx: Number(idx), A1: b.A1, A2: b.A2 }));
+      window.open('bills_calc.html', '_blank');
+    });
+    billsBody.appendChild(tr);
+  });
+}
+
+function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* export */
+exportCsvBtn.addEventListener('click', ()=>{
+  const arr = loadBills();
+  if(!arr.length){ alert('No bills to export'); return; }
+  const keys = Array.from(new Set(arr.flatMap(o=>Object.keys(o)))).sort();
+  const header = keys.join(',');
+  const lines = arr.map(row => keys.map(k => `"${String(row[k]||'').replace(/"/g,'""')}"`).join(','));
+  const csv = [header].concat(lines).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'bills_export.csv'; a.click(); URL.revokeObjectURL(url);
+});
+exportJsonBtn.addEventListener('click', ()=>{
+  const arr = loadBills();
+  if(!arr.length){ alert('No bills to export'); return; }
+  const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'bills_export.json'; a.click(); URL.revokeObjectURL(url);
+});
+
+/* initial render and handlers */
+searchText.addEventListener('input', renderList);
+window.addEventListener('storage', (ev) => { if(ev.key === BILLS_KEY) renderList(); });
+document.addEventListener('DOMContentLoaded', renderList);
+</script>
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Contract Bills — Calculation</title>
+
+<style>
+
+  :root{--bg1:#071226;--bg2:#041827;--muted:#9fb0bf;--accent:#7dd3fc}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial;
+       background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#eaf6f2;padding:22px}
+  .wrap{max-width:1100px;margin:0 auto;background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
+        padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.02)}
+  h1{margin:0 0 10px 0;font-weight:900}
+  .grid{display:grid;grid-template-columns:1fr 360px;gap:18px}
+  @media (max-width:980px){ .grid{grid-template-columns:1fr} }
+  .card{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
+  .row{display:grid;grid-template-columns:320px 1fr;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.02)}
+  .label{color:var(--muted);font-weight:800;font-size:0.95rem;font-family:inherit}
+  input[type="text"], input[type="number"], select{ width:100%;padding:9px;border-radius:6px;border:1px solid #ccc;font-size:0.95rem;font-family:inherit; }
+  .topActions{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .btn{ padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06); background:#0f2b42; color:var(--accent); cursor:pointer; font-weight:800; }
+  .btn-primary{ background:linear-gradient(90deg,#7EE7C6,#B78CFF); color:#042b28; border:0; }
+  .btn-danger{ background:linear-gradient(90deg,#FF9AA2,#FF6D6D); color:#200; border:0; font-weight:900; }
+  .sectionTitle{font-weight:900;margin:12px 0 8px}
+  .rightCard{position:sticky;top:20px;padding:12px}
+  .muted{color:var(--muted)}
+  table.compact{width:100%;border-collapse:collapse;margin-bottom:8px}
+  table.compact th, table.compact td{border:1px solid rgba(255,255,255,0.03);padding:8px;text-align:right}
+  table.compact th:first-child, table.compact td:first-child{ text-align:left;}
+  .small {width:140px}
+  input:focus, select:focus { outline:3px solid rgba(125,211,252,0.18) }
+  input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  .previewLabel{color:var(--muted);font-size:0.9rem;margin-top:8px}
+  .previewValue{font-weight:900;font-size:1.05rem;margin-bottom:6px}
+  .muted-small{font-size:0.9rem;color:#bcd}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Contract Bills — Calculation</h1>
+    <div class="grid">
+      <section class="card">
+        <div id="sorNotice" style="display:none;color:#ffd;background:rgba(255,255,255,0.02);padding:8px;border-radius:6px;margin-bottom:10px"></div>
+
+        <div class="topActions">
+          <a href="index.html" class="btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">← Home</a>
+          <button id="createNewBtn" class="btn">Create New</button>
+          <button id="loadBtn" class="btn">Load Bill</button>
+          <button id="saveBtn" class="btn btn-primary">Save Bill</button>
+          <button id="deleteBtn" class="btn btn-danger">Delete</button>
+        </div>
+
+        <div class="row"><div class="label">Depot</div><div><select id="A1"></select></div></div>
+        <div class="row"><div class="label">Bill No</div><div><div id="A2wrap"><input id="A2" type="text" /></div><div class="muted-small">Load Bill makes this a list; selecting restores it as text.</div></div></div>
+        <div class="row"><div class="label">Agency</div><div><input id="A3" type="text" readonly /></div></div>
+
+        <div class="sectionTitle">Wagon Receipt</div>
+        <table class="compact">
+          <thead><tr><th>Commodity</th><th>Bags</th><th>Weight</th><th>Amount</th></tr></thead>
+          <tbody>
+            <tr><td>Rice</td><td><input id="A4" type="number" step="1" /></td><td><input id="A5" type="number" step="0.000001" /></td><td><input id="A6" type="text" readonly /></td></tr>
+            <tr><td>Wheat</td><td><input id="A7" type="number" step="1" /></td><td><input id="A8" type="number" step="0.000001" /></td><td><input id="A9" type="text" readonly /></td></tr>
+            <tr><td style="font-weight:800">Total</td><td><input id="A10" type="number" readonly /></td><td><input id="A11" type="number" readonly step="0.000001" /></td><td><input id="A12" type="text" readonly /></td></tr>
+          </tbody>
+        </table>
+
+        <div class="sectionTitle">Stacking</div>
+        <table class="compact">
+          <thead><tr><th>Slab</th><th>Bags</th><th>Amount</th></tr></thead>
+          <tbody>
+            <tr><td>Upto 10</td><td><input id="A13" type="number" step="1" /></td><td><input id="A14" type="text" readonly /></td></tr>
+            <tr><td>Upto 16</td><td><input id="A15" type="number" step="1" /></td><td><input id="A16" type="text" readonly /></td></tr>
+            <tr><td>Upto 20</td><td><input id="A17" type="number" step="1" /></td><td><input id="A18" type="text" readonly /></td></tr>
+            <tr><td>Beyond 20</td><td><input id="A19" type="number" step="1" /></td><td><input id="A20" type="text" readonly /></td></tr>
+            <tr><td style="font-weight:800">Total</td><td><input id="A21" type="number" readonly /></td><td><input id="A22" type="text" readonly /></td></tr>
+          </tbody>
+        </table>
+
+        <div class="sectionTitle">Issues</div>
+        <table class="compact">
+          <thead><tr><th>Commodity</th><th>Bags</th><th>Weight</th><th>Amount</th></tr></thead>
+          <tbody>
+            <tr><td>Rice</td><td><input id="A23" type="number" step="1" /></td><td><input id="A24" type="number" step="0.000001" /></td><td><input id="A25" type="text" readonly /></td></tr>
+            <tr><td>Wheat</td><td><input id="A26" type="number" step="1" /></td><td><input id="A27" type="number" step="0.000001" /></td><td><input id="A28" type="text" readonly /></td></tr>
+            <tr><td style="font-weight:800">Total</td><td><input id="A29" type="number" readonly /></td><td><input id="A30" type="number" readonly step="0.000001" /></td><td><input id="A31" type="text" readonly /></td></tr>
+          </tbody>
+        </table>
+
+        <div class="sectionTitle">Transportation & Totals</div>
+        <table class="compact">
+          <tbody>
+            <tr><td>Weight</td><td><input id="A32" type="number" readonly step="0.000001" /></td><td>Amount</td><td><input id="A33" type="text" readonly /></td></tr>
+            <tr><td>Wagon Receipt Total</td><td><input id="A34" type="text" readonly /></td><td>Stacking Total</td><td><input id="A35" type="text" readonly /></td></tr>
+            <tr><td>Issues Total</td><td><input id="A36" type="text" readonly /></td><td>Transportation Total</td><td><input id="A37" type="text" readonly /></td></tr>
+            <tr><td style="font-weight:800">Grand Total Ops</td><td colspan="3"><input id="A38" type="text" readonly /></td></tr>
+          </tbody>
+        </table>
+
+        <div class="sectionTitle">Summary & Deductions</div>
+        <div class="row"><div class="label">ASOR Applied</div><div><input id="A39" type="text" readonly /></div></div>
+        <div class="row"><div class="label">Supervision</div><div><input id="A40" type="text" readonly /></div></div>
+        <div class="row"><div class="label">Total Bill (Gross)</div><div><input id="A41" type="text" readonly /></div></div>
+        <div class="row"><div class="label">TDS</div><div><input id="A42" type="text" readonly /></div></div>
+        <div class="row"><div class="label">Other Recoveries</div><div><input id="A43" type="number" step="0.01" /></div></div>
+        <div class="row"><div class="label">SD Recovery (Yes/No)</div><div><select id="A44"><option value="no">No</option><option value="yes">Yes</option></select></div></div>
+        <div class="row"><div class="label">SD Recovery Amount</div><div><input id="A45" type="text" readonly /></div></div>
+        <div class="row"><div class="label">Nett Amount</div><div><input id="A46" type="text" readonly /></div></div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+          <button id="printBtn" class="btn">Print</button>
+          <button id="resetBtn" class="btn">Reset</button>
+        </div>
+      </section>
+
+      <aside class="rightCard card">
+        <div class="previewLabel">Bill No</div>
+        <div id="preview_bill" class="previewValue">—</div>
+
+        <div class="previewLabel">Depot</div>
+        <div id="preview_depot" class="previewValue">—</div>
+
+        <div class="previewLabel">Gross Bill Amount (A41)</div>
+        <div id="preview_gross" class="previewValue">₹0.00</div>
+
+        <div class="previewLabel">Nett Amount (A46)</div>
+        <div id="preview_nett" class="previewValue">₹0.00</div>
+
+        <hr style="margin:12px 0;border-color:rgba(255,255,255,0.03)" />
+        <div style="font-weight:900;margin-bottom:8px">Saved Bills</div>
+        <div id="savedList" class="muted-small">No saved bills</div>
+      </aside>
+    </div>
+  </div>
+
+<script>
+/* Storage keys */
+const SOR_KEY = 'sorData_v1';
+const BILLS_KEY = 'bills';
+const OPEN_KEY = 'bill_to_open';
+
+/* State */
+let sorMap = {};
+let loadedBillIndex = null;
+let loadModeActive = false;
+const inputOrder = ["A1","A2","A4","A5","A7","A8","A13","A15","A17","A19","A23","A24","A26","A27","A43","A44"];
+
+/* Formatters */
+function fmtMoney(n){ const num = Number(String(n||0).replace(/,/g,'')); return isFinite(num)?num.toFixed(2):'0.00'; }
+function fmtWeight(n){ const num = Number(String(n||0).replace(/,/g,'')); return isFinite(num)?num.toFixed(6):'0.000000'; }
+function parseNum(v){ if(v===null||v===undefined||v==='') return 0; const n=Number(String(v).replace(/,/g,'')); return isFinite(n)?n:0; }
+
+/* Load SOR */
+function loadSOR(){
+  const raw = localStorage.getItem(SOR_KEY);
+  let arr = null;
+  try { arr = raw ? JSON.parse(raw) : null; } catch(e){ arr = null; console.warn('SOR parse err', e); }
+  sorMap = {};
+  if(Array.isArray(arr) && arr.length){
+    arr.forEach(it=>{
+      const name = (it.depotName||'').trim(); if(!name) return;
+      let asor = parseNum(it.asor); if(asor>1) asor = asor/100;
+      let sup = parseNum(it.supervision); if(sup>1) sup = sup/100;
+      sorMap[name] = {
+        agency: String(it.agency||'').trim(),
+        unloading: parseNum(it.unloading),
+        receipt10: parseNum(it.receipt10),
+        receipt16: parseNum(it.receipt16),
+        receipt20: parseNum(it.receipt20),
+        receiptBeyond: parseNum(it.receiptBeyond),
+        issues: parseNum(it.issues),
+        transportation: parseNum(it.transportation),
+        asor, supervision: sup
+      };
+    });
+    showSorNotice(`Loaded ${Object.keys(sorMap).length} depot(s) from SOR Manager.`);
+  } else {
+    showSorNotice('No depots found in SOR Manager; using sample depots.');
+    sorMap = {
+      "FSD MG Complex": { agency:"FCI", unloading:5, receipt10:2, receipt16:2.5, receipt20:3, receiptBeyond:4, issues:6, transportation:0.8, asor:0.05, supervision:0.01 },
+      "MG Complex(MVN)": { agency:"CWC", unloading:4, receipt10:1.5, receipt16:2, receipt20:2.5, receiptBeyond:3.5, issues:5.5, transportation:0.75, asor:0.04, supervision:0.012 }
+    };
+  }
+  populateDepots();
+}
+function showSorNotice(m){ const n=document.getElementById('sorNotice'); if(!n) return; n.style.display='block'; n.innerText = m; setTimeout(()=>n.style.display='none',3800); }
+function populateDepots(){ const s=document.getElementById('A1'); s.innerHTML=''; const keys=Object.keys(sorMap).sort(); if(!keys.length){ const o=document.createElement('option'); o.value=''; o.textContent='No depots'; s.appendChild(o); return; } keys.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; s.appendChild(o); }); }
+
+/* Setters */
+function setAmt(id,v){ const el=document.getElementById(id); if(!el) return; el.value = fmtMoney(v); }
+function setW(id,v){ const el=document.getElementById(id); if(!el) return; el.value = fmtWeight(v); }
+function setInt(id,v){ const el=document.getElementById(id); if(!el) return; el.value = String(Math.trunc(Number(v)||0)); }
+
+/* Recalc implementing your formulas */
+function recalcAll(){
+  const depot = (document.getElementById('A1').value||'').trim();
+  const cfg = sorMap[depot] || {};
+  const agency = (document.getElementById('A3').value||'').toUpperCase();
+
+  const A4 = parseNum(document.getElementById('A4').value);
+  const A5 = parseNum(document.getElementById('A5').value);
+  const unpack = Number(cfg.unloading || 0);
+  const A6 = (agency==='FCI'||agency==='CWC') ? (A4*unpack) : (A5*unpack);
+  setAmt('A6',A6);
+
+  const A7 = parseNum(document.getElementById('A7').value);
+  const A8 = parseNum(document.getElementById('A8').value);
+  const A9 = (agency==='FCI'||agency==='CWC') ? (A7*unpack) : (A8*unpack);
+  setAmt('A9',A9);
+
+  setInt('A10', A4 + A7);
+  setW('A11', parseNum(document.getElementById('A5').value) + parseNum(document.getElementById('A8').value));
+  setAmt('A12', A6 + A9);
+
+  const ru10 = Number(cfg.receipt10||0), ru16=Number(cfg.receipt16||0), ru20=Number(cfg.receipt20||0), rpb=Number(cfg.receiptBeyond||0);
+  const A13 = parseNum(document.getElementById('A13').value); setAmt('A14', A13*ru10);
+  const A15 = parseNum(document.getElementById('A15').value); setAmt('A16', A15*ru16);
+  const A17 = parseNum(document.getElementById('A17').value); setAmt('A18', A17*ru20);
+  const A19 = parseNum(document.getElementById('A19').value); setAmt('A20', A19*rpb);
+
+  setInt('A21', A13 + A15 + A17 + A19);
+  setAmt('A22', parseNum(document.getElementById('A14').value)+parseNum(document.getElementById('A16').value)+parseNum(document.getElementById('A18').value)+parseNum(document.getElementById('A20').value));
+
+  const is_sor = Number(cfg.issues||0);
+  const A23 = parseNum(document.getElementById('A23').value);
+  const A24 = parseNum(document.getElementById('A24').value);
+  const A25 = (agency==='FCI'||agency==='CWC') ? (A23*is_sor) : (A24*is_sor);
+  setAmt('A25',A25);
+
+  const A26 = parseNum(document.getElementById('A26').value);
+  const A27 = parseNum(document.getElementById('A27').value);
+  const A28 = (agency==='FCI'||agency==='CWC') ? (A26*is_sor) : (A27*is_sor);
+  setAmt('A28',A28);
+
+  setInt('A29', A23 + A26);
+  setW('A30', A24 + A27);
+  setAmt('A31', A25 + A28);
+
+  setW('A32', parseNum(document.getElementById('A11').value));
+  const A33 = parseNum(document.getElementById('A32').value) * Number(cfg.transportation || 0);
+  setAmt('A33',A33);
+
+  setAmt('A34', parseNum(document.getElementById('A12').value));
+  setAmt('A35', parseNum(document.getElementById('A22').value));
+  setAmt('A36', parseNum(document.getElementById('A31').value));
+  setAmt('A37', parseNum(document.getElementById('A33').value));
+
+  const A38 = parseNum(document.getElementById('A34').value) + parseNum(document.getElementById('A35').value) + parseNum(document.getElementById('A36').value) + parseNum(document.getElementById('A37').value);
+  setAmt('A38',A38);
+
+  const asor = Number(cfg.asor || 0);
+  const A39 = A38 * (1 + asor); setAmt('A39',A39);
+  let sup = Number(cfg.supervision || 0); if(sup>1) sup = sup/100;
+  const A40 = A39 * sup; setAmt('A40',A40);
+
+  const A41 = A39 + A40; setAmt('A41',A41);
+
+  let tds = 0.02; if((document.getElementById('A1').value||'')==="FSD MG Complex" || (document.getElementById('A1').value||'')==="MG Complex(MVN)") tds = 0.01;
+  setAmt('A42', A41 * tds);
+
+  const A43 = parseNum(document.getElementById('A43').value);
+  const A44 = (document.getElementById('A44').value || 'no').toLowerCase();
+  const A45 = (A44 === 'yes') ? (A41 * 0.10) : 0; setAmt('A45',A45);
+
+  const A46 = A41 - (parseNum(document.getElementById('A42').value) + A43 + A45);
+  setAmt('A46',A46);
+
+  document.getElementById('preview_bill').innerText = document.getElementById('A2').value || '—';
+  document.getElementById('preview_depot').innerText = document.getElementById('A1').value || '—';
+  document.getElementById('preview_gross').innerText = '₹' + fmtMoney(A41 || 0);
+  document.getElementById('preview_nett').innerText  = '₹' + fmtMoney(A46 || 0);
+}
+
+/* Enter navigation & wheel prevention */
+function enableEnterNav(){
+  const present = inputOrder.filter(id => document.getElementById(id));
+  const all = Array.from(document.querySelectorAll('input,select')).filter(el => el.tagName==='INPUT' || el.tagName==='SELECT');
+  all.forEach(el => el.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){ e.preventDefault();
+      const id = el.id; let idx = present.indexOf(id);
+      if(idx >= 0){
+        for(let i=idx+1;i<present.length;i++){ const c=document.getElementById(present[i]); if(c && !c.readOnly){ c.focus(); if(c.select) c.select(); return; } }
+        for(let i=0;i<present.length;i++){ const c=document.getElementById(present[i]); if(c && !c.readOnly){ c.focus(); if(c.select) c.select(); return; } }
+      } else {
+        const domIdx = all.indexOf(el);
+        for(let j=domIdx+1;j<all.length;j++){ if(all[j] && !all[j].readOnly){ all[j].focus(); if(all[j].select) all[j].select(); return; } }
+        for(let j=0;j<all.length;j++){ if(all[j] && !all[j].readOnly){ all[j].focus(); if(all[j].select) all[j].select(); return; } }
+      }
+    }
+  })); }
+function preventWheel(){ document.addEventListener('wheel', function(e){ const a=document.activeElement; if(a && a.tagName==='INPUT' && a.type==='number'){ e.preventDefault(); } }, { passive:false }); }
+
+/* Bills storage */
+function loadBills(){ try { return JSON.parse(localStorage.getItem(BILLS_KEY) || '[]'); } catch(e){ return []; } }
+function saveBills(arr){ localStorage.setItem(BILLS_KEY, JSON.stringify(arr)); }
+
+/* Saved list */
+function refreshSavedList(){ const arr = loadBills(); const el = document.getElementById('savedList'); if(!arr.length){ el.innerText='No saved bills'; return; } el.innerHTML=''; arr.slice().reverse().forEach(b=>{ const d=document.createElement('div'); d.style.padding='6px 0'; d.innerHTML = `<div style="font-weight:700">${b.A2||'—'} — ${b.A1||'—'}</div><div class="muted-small">Gross ₹${fmtMoney(b.A41||0)} • Nett ₹${fmtMoney(b.A46||0)}</div>`; el.appendChild(d); }); }
+
+/* Create / Load / Save / Delete */
+function createNew(){ const keep=document.getElementById('A1').value; for(let i=1;i<=46;i++){ const el=document.getElementById('A'+i); if(!el) continue; if('A1'==='A'+i) continue; el.value=''; } loadedBillIndex=null; loadModeActive=false; exitLoadMode(); onDepotChange(); recalcAll(); }
+
+function enterLoadMode(){
+  for(let i=1;i<=46;i++){ const el=document.getElementById('A'+i); if(!el) continue; if(el.id==='A1') continue; el.value=''; }
+  loadedBillIndex=null; loadModeActive=true;
+  const wrap=document.getElementById('A2wrap'); const cur=wrap.querySelector('#A2');
+  if(cur && cur.tagName.toLowerCase() === 'select'){ populateLoadSelect(cur); cur.focus(); return; }
+  const sel=document.createElement('select'); sel.id='A2'; sel.style.width='100%';
+  populateLoadSelect(sel);
+  sel.addEventListener('change', function(){ const val=this.value; if(val==='') return; if(val==='__show_all__'){ populateLoadSelect(this, true); return; } loadBillIntoForm(Number(val)); });
+  if(wrap && cur) wrap.replaceChild(sel, cur);
+  sel.focus();
+}
+
+function populateLoadSelect(sel, showAll=false){
+  sel.innerHTML=''; const empty=document.createElement('option'); empty.value=''; empty.textContent='-- select bill --'; sel.appendChild(empty);
+  const depot=document.getElementById('A1').value||''; const arr=loadBills();
+  const list = showAll ? arr.map((b,i)=>({b,i})) : arr.map((b,i)=>({b,i})).filter(x => (depot? (x.b.A1||'')===depot : true));
+  if(list.length===0){ const none=document.createElement('option'); none.value='__none__'; none.textContent='No bills for selected depot'; none.disabled=true; sel.appendChild(none); const all=document.createElement('option'); all.value='__show_all__'; all.textContent='— Show all bills —'; sel.appendChild(all); return; }
+  list.forEach(it => { const b=it.b; const idx=it.i; const label = `${b.A2||'—'} — ${b.A1||'—'} (${ b.savedAt ? (new Date(b.savedAt)).toLocaleString() : 'unsaved' })`; const opt=document.createElement('option'); opt.value=idx; opt.textContent=label; sel.appendChild(opt); });
+}
+
+function exitLoadMode(){ const wrap=document.getElementById('A2wrap'); const cur = wrap ? wrap.querySelector('#A2') : null; if(!cur) return; if(cur.tagName.toLowerCase()==='input') return; const input=document.createElement('input'); input.id='A2'; input.type='text'; if(cur.tagName.toLowerCase()==='select' && cur.value && cur.value!=='' && cur.value!=='__show_all__' && cur.value!=='__none__'){ const stored = loadBills()[Number(cur.value)]; if(stored) input.value = stored.A2 || ''; } wrap.replaceChild(input, cur); enableEnterNav(); }
+
+function loadBillIntoForm(index){
+  const arr = loadBills(); const rec = arr[index]; if(!rec){ alert('Selected bill not found'); return; }
+  for(let i=1;i<=46;i++){ const id='A'+i; const el=document.getElementById(id); if(!el) continue; if(el.readOnly && el.type==='text') el.value = fmtMoney(rec[id]); else el.value = rec[id] || ''; }
+  loadedBillIndex = index; exitLoadMode(); const a2=document.getElementById('A2'); if(a2) a2.value = rec.A2 || ''; const depot=(document.getElementById('A1').value||'').trim(); const cfg=sorMap[depot]||{}; if(cfg && cfg.agency) document.getElementById('A3').value = cfg.agency; recalcAll(); alert('Bill loaded.'); 
+}
+
+function saveCurrent(){
+  const billNo = (document.getElementById('A2') && document.getElementById('A2').value || '').trim(); if(!billNo){ alert('Enter Bill No before saving'); return; }
+  const depot = (document.getElementById('A1').value || '').trim(); if(!depot){ alert('Select Depot before saving'); return; }
+  const arr = loadBills(); const rec = {}; for(let i=1;i<=46;i++){ const id='A'+i; const el=document.getElementById(id); rec[id] = el ? el.value : ''; } rec.savedAt = new Date().toISOString();
+  if(loadedBillIndex !== null && arr[loadedBillIndex]){ arr[loadedBillIndex] = rec; } else {
+    const idx = arr.findIndex(b => (b.A1||'')===depot && (b.A2||'')===billNo);
+    if(idx >= 0){ if(!confirm('A bill with same Depot and Bill No exists. Overwrite?')) return; arr[idx] = rec; loadedBillIndex = idx; } else { arr.push(rec); loadedBillIndex = arr.length - 1; }
+  }
+  saveBills(arr); refreshSavedList(); alert('Saved.');
+}
+
+function deleteLoaded(){ if(loadedBillIndex===null){ alert('No loaded bill. Use Load Bill to pick one.'); return; } if(!confirm('Delete this bill permanently?')) return; const arr=loadBills(); arr.splice(loadedBillIndex,1); saveBills(arr); loadedBillIndex=null; refreshSavedList(); createNew(); alert('Deleted.'); }
+
+document.addEventListener('DOMContentLoaded', function(){
+  loadSOR();
+  const first = Object.keys(sorMap)[0]; if(first) document.getElementById('A1').value = first; if(sorMap[first]) document.getElementById('A3').value = sorMap[first].agency || '';
+  const reactive = ["A1","A2","A3","A4","A5","A7","A8","A13","A15","A17","A19","A23","A24","A26","A27","A43","A44"];
+  reactive.forEach(id => { const el=document.getElementById(id); if(!el) return; el.addEventListener('input', recalcAll); el.addEventListener('change', recalcAll); });
+  document.getElementById('createNewBtn').addEventListener('click', createNew); document.getElementById('loadBtn').addEventListener('click', enterLoadMode); document.getElementById('saveBtn').addEventListener('click', saveCurrent); document.getElementById('deleteBtn').addEventListener('click', deleteLoaded);
+  document.getElementById('printBtn').addEventListener('click', ()=>window.print()); document.getElementById('resetBtn').addEventListener('click', ()=> { if(confirm('Reset all inputs?')) createNew(); });
+  document.getElementById('A1').addEventListener('change', function(){ const dv=(this.value||'').trim(); const cfg=sorMap[dv]||{}; document.getElementById('A3').value = cfg.agency || ''; if(loadModeActive) enterLoadMode(); recalcAll(); });
+  enableEnterNav(); preventWheel(); refreshSavedList(); recalcAll();
+
+  const payload = localStorage.getItem(OPEN_KEY);
+  if(payload){
+    try {
+      const p = JSON.parse(payload); const arr = loadBills();
+      if(p.idx != null && arr[p.idx]){ if(p.A1) document.getElementById('A1').value = p.A1; onDepotChange(); loadBillIntoForm(Number(p.idx)); }
+      else if(p.A1 && p.A2){ const idx = arr.findIndex(b => (b.A1||'')===p.A1 && (b.A2||'')===p.A2); if(idx >= 0){ document.getElementById('A1').value = p.A1; onDepotChange(); loadBillIntoForm(idx); } }
+    } catch(e){ console.warn(e); }
+    localStorage.removeItem(OPEN_KEY);
+  }
+
+  window.addEventListener('storage', (ev)=>{ if(ev.key === SOR_KEY){ loadSOR(); recalcAll(); } else if(ev.key === BILLS_KEY){ refreshSavedList(); if(loadModeActive) enterLoadMode(); } });
+});
+
+function loadSOR(){
+  const raw = localStorage.getItem(SOR_KEY);
+  let arr = null;
+  try { arr = raw ? JSON.parse(raw) : null; } catch(e){ arr=null; console.warn(e); }
+  sorMap = {};
+  if(Array.isArray(arr) && arr.length){
+    arr.forEach(it=>{
+      const name = (it.depotName||'').trim(); if(!name) return;
+      let asor = parseNum(it.asor); if(asor>1) asor = asor/100;
+      let sup = parseNum(it.supervision); if(sup>1) sup = sup/100;
+      sorMap[name] = { agency:String(it.agency||'').trim(), unloading:parseNum(it.unloading), receipt10:parseNum(it.receipt10), receipt16:parseNum(it.receipt16), receipt20:parseNum(it.receipt20), receiptBeyond:parseNum(it.receiptBeyond), issues:parseNum(it.issues), transportation:parseNum(it.transportation), asor, supervision: sup };
+    });
+  } else {
+    sorMap = { "FSD MG Complex": { agency:"FCI", unloading:5, receipt10:2, receipt16:2.5, receipt20:3, receiptBeyond:4, issues:6, transportation:0.8, asor:0.05, supervision:0.01 }, "MG Complex(MVN)": { agency:"CWC", unloading:4, receipt10:1.5, receipt16:2, receipt20:2.5, receiptBeyond:3.5, issues:5.5, transportation:0.75, asor:0.04, supervision:0.012 } };
+  }
+  populateDepots();
+}
+
+function onDepotChange(){ const depot=(document.getElementById('A1').value||'').trim(); const cfg=sorMap[depot]||{}; document.getElementById('A3').value = cfg.agency || ''; recalcAll(); }
+</script>
+</body>
+</html>
