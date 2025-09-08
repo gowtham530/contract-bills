@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
-// Firebase config
+// Firebase config (same)
 const firebaseConfig = {
   apiKey: "AIzaSyBB8E1qDOs2rNr84xrlOoMWWZLtXXjZZbk",
   authDomain: "contract-bills.firebaseapp.com",
@@ -37,6 +37,13 @@ const db = firebase.firestore();
   input, select { padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.04); background:transparent;color:inherit }
   .actions{display:flex;gap:8px}
   .small{font-size:0.9rem;color:#bcd}
+
+  /* Toasts */
+  .toast-wrap{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .toast{min-width:220px;padding:10px 14px;border-radius:8px;background:rgba(0,0,0,0.8);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.6);font-weight:700}
+  .toast.success{background:linear-gradient(90deg,#7EE7C6,#38b29a);color:#042b28}
+  .toast.error{background:linear-gradient(90deg,#ff7b7b,#ff4d4d);color:#200}
+  .toast.info{background:linear-gradient(90deg,#7dd3fc,#4ca0d6);color:#042b28}
 </style>
 </head>
 <body>
@@ -59,7 +66,19 @@ const db = firebase.firestore();
     <div style="margin-top:12px;color:#bcd;font-size:0.9rem">Notes: Use Save All to push the current table content to Firestore. Collection: <code>sor</code>.</div>
   </div>
 
+  <div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="true"></div>
+
 <script>
+/* Toast */
+function showToast(msg, type='info', timeout=3000){
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type==='success' ? 'success' : type==='error' ? 'error' : 'info');
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity 300ms'; t.style.opacity='0'; setTimeout(()=>t.remove(),350); }, timeout);
+}
+
 function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 /* Render from snapshot */
@@ -88,9 +107,29 @@ function renderSORFromDocs(docs){
 }
 
 /* Add a blank row for new depot */
-function addBlankRow(){ const body=document.getElementById('sorBody'); const tr=document.createElement('tr'); tr.innerHTML = `<td><input data-field="depotName" value="" /></td><td><input data-field="agency" value="" /></td><td><input data-field="unloading" value="" /></td><td><input data-field="receipt10" value="" /></td><td><input data-field="receipt16" value="" /></td><td><input data-field="receipt20" value="" /></td><td><input data-field="receiptBeyond" value="" /></td><td><input data-field="issues" value="" /></td><td><input data-field="transportation" value="" /></td><td><input data-field="asor" value="" /></td><td><input data-field="supervision" value="" /></td><td><button class="delBtn">Delete</button></td>`; body.prepend(tr); tr.querySelector('.delBtn').addEventListener('click', ()=> tr.remove()); }
+function addBlankRow(){
+  const body=document.getElementById('sorBody');
+  const tr=document.createElement('tr');
+  tr.innerHTML = `<td><input data-field="depotName" value="" /></td>
+    <td><input data-field="agency" value="" /></td>
+    <td><input data-field="unloading" value="" /></td>
+    <td><input data-field="receipt10" value="" /></td>
+    <td><input data-field="receipt16" value="" /></td>
+    <td><input data-field="receipt20" value="" /></td>
+    <td><input data-field="receiptBeyond" value="" /></td>
+    <td><input data-field="issues" value="" /></td>
+    <td><input data-field="transportation" value="" /></td>
+    <td><input data-field="asor" value="" /></td>
+    <td><input data-field="supervision" value="" /></td>
+    <td><button class="delBtn">Delete</button></td>`;
+  body.prepend(tr);
+  tr.querySelector('.delBtn').addEventListener('click', ()=> tr.remove());
+}
 
-/* Save all rows to Firestore (replace collection) */
+/* Optimistic Save All: replace server collection with current UI rows.
+   Implementation: immediately show a saving toast, perform server replace batch,
+   on success show success toast; on failure show error (UI table unchanged)
+*/
 async function saveAll(){
   const rows = Array.from(document.querySelectorAll('#sorBody tr'));
   const out = [];
@@ -101,19 +140,26 @@ async function saveAll(){
     inputs.forEach(inp => { const f = inp.getAttribute('data-field'); obj[f] = inp.value; });
     if((obj.depotName||'').trim()) out.push(obj);
   });
-  // Replace collection: delete existing docs then add new ones
-  const col = db.collection('sor');
-  const existing = await col.get();
-  const batch = db.batch();
-  existing.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
-  const batch2 = db.batch();
-  out.forEach(item=>{
-    const ref = col.doc();
-    batch2.set(ref, item);
-  });
-  await batch2.commit();
-  alert('Saved to server.');
+  if(out.length===0){ showToast('Nothing to save', 'info'); return; }
+  showToast('Saving SOR to server…', 'info', 3000);
+  try{
+    // delete existing then add new
+    const col = db.collection('sor');
+    const existing = await col.get();
+    const batch = db.batch();
+    existing.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    const batch2 = db.batch();
+    out.forEach(item=>{
+      const ref = col.doc();
+      batch2.set(ref, item);
+    });
+    await batch2.commit();
+    showToast('SOR saved to server', 'success');
+  }catch(e){
+    console.error(e);
+    showToast('Save failed: ' + (e.message||'network error'), 'error', 5000);
+  }
 }
 
 /* Realtime listener: render when collection changes */
@@ -122,7 +168,8 @@ function startSorRealtime(){
   if(sorUnsub) sorUnsub();
   sorUnsub = db.collection('sor').orderBy('depotName').onSnapshot(snapshot => {
     renderSORFromDocs(snapshot.docs);
-  }, err => console.error('sor onSnapshot err', err));
+    showToast('SOR updated', 'info', 1200);
+  }, err => { console.error('sor onSnapshot err', err); showToast('Realtime SOR error', 'error'); });
 }
 
 /* Init */
