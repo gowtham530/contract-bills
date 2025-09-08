@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
-// Firebase config (you supplied)
+// Firebase config (your values)
 const firebaseConfig = {
   apiKey: "AIzaSyBB8E1qDOs2rNr84xrlOoMWWZLtXXjZZbk",
   authDomain: "contract-bills.firebaseapp.com",
@@ -157,85 +157,59 @@ function fmtMoney(n){ const num = Number(String(n||0).replace(/,/g,'')); return 
 function fmtWeight(n){ const num = Number(String(n||0).replace(/,/g,'')); return isFinite(num)?num.toFixed(6):'0.000000'; }
 function parseNum(v){ if(v===null||v===undefined||v==='') return 0; const n=Number(String(v).replace(/,/g,'')); return isFinite(n)?n:0; }
 
-/* ---------- Firestore-backed persistence ---------- */
-async function fetchSORFromServer(){
-  const snap = await db.collection('sor').orderBy('depotName').get();
-  const arr = [];
-  snap.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
-  return arr;
-}
-async function fetchBillsFromServer(){
-  const snap = await db.collection('bills').orderBy('savedAt','desc').get();
-  const arr = [];
-  snap.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
-  return arr;
-}
-async function saveBillToServer(billObj){
-  if(billObj._id){
-    const id = billObj._id;
-    const copy = {...billObj}; delete copy._id;
-    await db.collection('bills').doc(id).set(copy, {merge:true});
-    return id;
-  } else {
-    billObj.savedAt = new Date().toISOString();
-    const ref = await db.collection('bills').add(billObj);
-    return ref.id;
-  }
-}
-async function deleteBillFromServer(id){
-  if(!id) throw new Error('missing id');
-  await db.collection('bills').doc(id).delete();
-}
+/* ---------- Firestore helpers ---------- */
+async function fetchBillsFromServer(){ const snap = await db.collection('bills').orderBy('savedAt','desc').get(); const arr=[]; snap.forEach(doc=>{ const d=doc.data(); d._id=doc.id; arr.push(d); }); return arr; }
+async function saveBillToServer(billObj){ if(billObj._id){ const copy={...billObj}; delete copy._id; await db.collection('bills').doc(billObj._id).set(copy,{merge:true}); return billObj._id; } else { billObj.savedAt = new Date().toISOString(); const ref = await db.collection('bills').add(billObj); return ref.id; } }
+async function deleteBillFromServer(id){ if(!id) throw new Error('missing id'); await db.collection('bills').doc(id).delete(); }
 
-/* ---------- in-memory SOR map (populated from Firestore) ---------- */
+/* ---------- SOR + in-memory map ---------- */
 let sorMap = {};
 let loadedBillId = null;
 let loadModeActive = false;
 
 /* Populate depot select from sorMap */
-function populateDepots(){
-  const s = document.getElementById('A1'); s.innerHTML = '';
-  const keys = Object.keys(sorMap).sort();
-  if(!keys.length){ const opt=document.createElement('option'); opt.value=''; opt.textContent='No depots'; s.appendChild(opt); return; }
-  keys.forEach(k => { const o=document.createElement('option'); o.value = k; o.textContent = k; s.appendChild(o); });
+function populateDepots(){ const s = document.getElementById('A1'); if(!s) return; s.innerHTML=''; const keys = Object.keys(sorMap).sort(); if(!keys.length){ const o=document.createElement('option'); o.value=''; o.textContent='No depots'; s.appendChild(o); return; } keys.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; s.appendChild(o); }); }
+
+/* Update sorMap from a Firestore snapshot (onSnapshot) */
+function applySORSnapshot(snapshot){
+  sorMap = {};
+  snapshot.forEach(doc=>{
+    const it = doc.data();
+    const name = (it.depotName||'').trim();
+    if(!name) return;
+    let asor = parseNum(it.asor); if(asor>1) asor = asor/100;
+    let sup = parseNum(it.supervision); if(sup>1) sup = sup/100;
+    sorMap[name] = {
+      agency: String(it.agency||'').trim(),
+      unloading: parseNum(it.unloading),
+      receipt10: parseNum(it.receipt10),
+      receipt16: parseNum(it.receipt16),
+      receipt20: parseNum(it.receipt20),
+      receiptBeyond: parseNum(it.receiptBeyond),
+      issues: parseNum(it.issues),
+      transportation: parseNum(it.transportation),
+      asor, supervision: sup
+    };
+  });
+  populateDepots();
 }
 
-/* Fetch SOR from server and populate sorMap */
-async function loadSORFromServer(){
-  try{
-    const arr = await fetchSORFromServer();
-    sorMap = {};
-    arr.forEach(it=>{
-      const name = (it.depotName||'').trim();
-      if(!name) return;
-      let asor = parseNum(it.asor); if(asor>1) asor = asor/100;
-      let sup = parseNum(it.supervision); if(sup>1) sup = sup/100;
-      sorMap[name] = {
-        agency: String(it.agency||'').trim(),
-        unloading: parseNum(it.unloading),
-        receipt10: parseNum(it.receipt10),
-        receipt16: parseNum(it.receipt16),
-        receipt20: parseNum(it.receipt20),
-        receiptBeyond: parseNum(it.receiptBeyond),
-        issues: parseNum(it.issues),
-        transportation: parseNum(it.transportation),
-        asor, supervision: sup
-      };
-    });
-    populateDepots();
-    showSorNotice(`Loaded ${Object.keys(sorMap).length} depot(s) from server`);
-  }catch(e){ console.error('loadSORFromServer', e); showSorNotice('Error loading SOR from server'); }
+/* Update savedList from bills snapshot */
+function refreshSavedListFromSnapshot(snapshot){
+  const el = document.getElementById('savedList');
+  const arr = [];
+  snapshot.forEach(doc => { const b = doc.data(); b._id = doc.id; arr.push(b); });
+  if(!arr.length){ el.innerText='No saved bills'; return; }
+  el.innerHTML='';
+  arr.forEach(b => {
+    const d=document.createElement('div'); d.style.padding='6px 0';
+    d.innerHTML = `<div style="font-weight:700">${b.A2||'—'} — ${b.A1||'—'}</div>
+      <div class="muted-small">Gross ₹${fmtMoney(b.A41||0)} • Nett ₹${fmtMoney(b.A46||0)}</div>`;
+    el.appendChild(d);
+  });
 }
 
-/* Realtime listeners to keep UI in sync immediately */
-function startRealtimeListeners(){
-  db.collection('sor').onSnapshot(()=>{ loadSORFromServer(); });
-  db.collection('bills').onSnapshot(()=>{ refreshSavedList(); });
-}
-
-/* ---------- UI helpers & recalc ---------- */
-function showSorNotice(m){ const n=document.getElementById('sorNotice'); if(!n) return; n.style.display='block'; n.innerText = m; setTimeout(()=>n.style.display='none',3500); }
-
+/* ---------- recalc logic (unchanged) ---------- */
 function setAmt(id,v){ const el=document.getElementById(id); if(!el) return; el.value = fmtMoney(v); }
 function setW(id,v){ const el=document.getElementById(id); if(!el) return; el.value = fmtWeight(v); }
 function setInt(id,v){ const el=document.getElementById(id); if(!el) return; el.value = String(Math.trunc(Number(v)||0)); }
@@ -319,22 +293,8 @@ function recalcAll(){
   document.getElementById('preview_nett').innerText  = '₹' + fmtMoney(A46 || 0);
 }
 
-/* ---------- Saved list ---------- */
-async function refreshSavedList(){
-  try{
-    const bills = await fetchBillsFromServer();
-    const el = document.getElementById('savedList');
-    if(!bills.length){ el.innerText='No saved bills'; return; }
-    el.innerHTML='';
-    bills.slice().forEach(b => {
-      const d=document.createElement('div');
-      d.style.padding='6px 0';
-      d.innerHTML = `<div style="font-weight:700">${b.A2||'—'} — ${b.A1||'—'}</div>
-        <div class="muted-small">Gross ₹${fmtMoney(b.A41||0)} • Nett ₹${fmtMoney(b.A46||0)}</div>`;
-      el.appendChild(d);
-    });
-  }catch(e){ console.error(e); }
-}
+/* ---------- Saved list helpers ---------- */
+function refreshSavedList(){ db.collection('bills').orderBy('savedAt','desc').get().then(snap=>{ refreshSavedListFromSnapshot(snap); }).catch(e=>console.error(e)); }
 
 /* ---------- Create / Load / Save / Delete (Firestore-backed) ---------- */
 function enableEnterNav(){
@@ -375,7 +335,10 @@ function enterLoadMode(){
 
 async function populateLoadSelect(sel, showAll=false){
   sel.innerHTML=''; const empty=document.createElement('option'); empty.value=''; empty.textContent='-- select bill --'; sel.appendChild(empty);
-  const depot=document.getElementById('A1').value||''; const arr = await fetchBillsFromServer();
+  const depot=document.getElementById('A1').value||''; 
+  const snap = await db.collection('bills').orderBy('savedAt','desc').get();
+  const arr = [];
+  snap.forEach(doc => { const b=doc.data(); b._id = doc.id; arr.push(b); });
   const list = showAll ? arr : arr.filter(x => depot ? (x.A1||'')===depot : true);
   if(list.length===0){ const none=document.createElement('option'); none.value='__none__'; none.textContent='No bills for selected depot'; none.disabled=true; sel.appendChild(none); const all=document.createElement('option'); all.value='__show_all__'; all.textContent='— Show all bills —'; sel.appendChild(all); return; }
   list.forEach(b => { const opt=document.createElement('option'); opt.value = b._id; opt.textContent = `${b.A2||'—'} — ${b.A1||'—'} (${ b.savedAt ? (new Date(b.savedAt)).toLocaleString() : 'unsaved' })`; sel.appendChild(opt); });
@@ -400,22 +363,35 @@ async function saveCurrent(){
   if(loadedBillId) rec._id = loadedBillId;
   try{
     const id = await saveBillToServer(rec);
-    loadedBillId = id; refreshSavedList(); alert('Saved.');
+    loadedBillId = id; /* refreshSavedList invoked by realtime listener */
+    alert('Saved.');
   }catch(e){ console.error(e); alert('Save failed: '+e.message); }
 }
 
-async function deleteLoaded(){ if(!loadedBillId){ alert('No loaded bill. Use Load Bill to pick one.'); return; } if(!confirm('Delete this bill permanently?')) return; try{ await deleteBillFromServer(loadedBillId); loadedBillId=null; refreshSavedList(); createNew(); alert('Deleted.'); }catch(e){ console.error(e); alert('Delete failed'); } }
+async function deleteLoaded(){ if(!loadedBillId){ alert('No loaded bill. Use Load Bill to pick one.'); return; } if(!confirm('Delete this bill permanently?')) return; try{ await deleteBillFromServer(loadedBillId); loadedBillId=null; createNew(); alert('Deleted.'); }catch(e){ console.error(e); alert('Delete failed'); } }
 
-/* ---------- Initialization ---------- */
+/* ---------- Realtime wiring ---------- */
+let sorUnsub=null, billsUnsub=null;
+function startRealtime(){
+  if(sorUnsub) sorUnsub();
+  sorUnsub = db.collection('sor').orderBy('depotName').onSnapshot(snapshot => {
+    applySORSnapshot(snapshot);
+    recalcAll();
+  }, err => console.error('sor onSnapshot err', err));
+
+  if(billsUnsub) billsUnsub();
+  billsUnsub = db.collection('bills').orderBy('savedAt','desc').onSnapshot(snapshot => {
+    refreshSavedListFromSnapshot(snapshot);
+  }, err => console.error('bills onSnapshot err', err));
+}
+
+/* ---------- Init ---------- */
 function attachReactive(){
   const reactive = ["A1","A2","A3","A4","A5","A7","A8","A13","A15","A17","A19","A23","A24","A26","A27","A43","A44"];
   reactive.forEach(id => { const el=document.getElementById(id); if(!el) return; el.addEventListener('input', recalcAll); el.addEventListener('change', recalcAll); });
 }
 
-document.addEventListener('DOMContentLoaded', async function(){
-  await loadSORFromServer();
-  startRealtimeListeners();
-  const first = Object.keys(sorMap)[0]; if(first) { document.getElementById('A1').value = first; if(sorMap[first]) document.getElementById('A3').value = sorMap[first].agency || ''; }
+document.addEventListener('DOMContentLoaded', async ()=>{
   attachReactive();
   document.getElementById('createNewBtn').addEventListener('click', createNew);
   document.getElementById('loadBtn').addEventListener('click', enterLoadMode);
@@ -424,7 +400,11 @@ document.addEventListener('DOMContentLoaded', async function(){
   document.getElementById('printBtn').addEventListener('click', ()=>window.print());
   document.getElementById('resetBtn').addEventListener('click', ()=> { if(confirm('Reset all inputs?')) createNew(); });
   document.getElementById('A1').addEventListener('change', function(){ const dv=(this.value||'').trim(); const cfg=sorMap[dv]||{}; document.getElementById('A3').value = cfg.agency || ''; if(loadModeActive) enterLoadMode(); recalcAll(); });
-  enableEnterNav(); preventWheel(); refreshSavedList(); recalcAll();
+
+  enableEnterNav(); preventWheel();
+
+  // start realtime listeners
+  startRealtime();
 
   // If opened from bills_data (bill_to_open), fetch that bill by _id
   const payload = localStorage.getItem('bill_to_open');
