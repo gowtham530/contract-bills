@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
-// Firebase config (same)
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyBB8E1qDOs2rNr84xrlOoMWWZLtXXjZZbk",
   authDomain: "contract-bills.firebaseapp.com",
@@ -36,6 +36,7 @@ const db = firebase.firestore();
   tbody td{padding:10px 8px;border-top:1px dashed rgba(255,255,255,0.02);vertical-align:top}
   input, select { padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.04); background:transparent;color:inherit }
   .actions{display:flex;gap:8px}
+  .small{font-size:0.9rem;color:#bcd}
 </style>
 </head>
 <body>
@@ -43,7 +44,10 @@ const db = firebase.firestore();
     <h1>SOR Manager</h1>
     <a href="index.html" class="homeBtn">← Home</a>
 
-    <div style="margin-top:12px;margin-bottom:8px"><button id="addDepotBtn" class="homeBtn">Add Depot</button> <button id="saveAllBtn" class="homeBtn">Save All to Server</button></div>
+    <div style="margin-top:12px;margin-bottom:8px">
+      <button id="addDepotBtn" class="homeBtn">Add Depot</button>
+      <button id="saveAllBtn" class="homeBtn">Save All to Server</button>
+    </div>
 
     <table id="sorTable">
       <thead>
@@ -52,84 +56,41 @@ const db = firebase.firestore();
       <tbody id="sorBody"><tr><td colspan="12" class="small">Loading…</td></tr></tbody>
     </table>
 
-    <div style="margin-top:12px;color:#bcd;font-size:0.9rem">Notes: Use Save All to push the current table content to Firestore. Changes are stored in collection <code>sor</code>.</div>
+    <div style="margin-top:12px;color:#bcd;font-size:0.9rem">Notes: Use Save All to push the current table content to Firestore. Collection: <code>sor</code>.</div>
   </div>
 
 <script>
 function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-/* Fetch SOR list from Firestore */
-async function fetchSORFromServer(){
-  const snap = await db.collection('sor').orderBy('depotName').get();
-  const arr = [];
-  snap.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
-  return arr;
-}
-
-/* Replace server collection with provided array */
-async function saveSORToServer(sorArray){
-  const col = db.collection('sor');
-  const existing = await col.get();
-  const batch = db.batch();
-  existing.forEach(doc => batch.delete(doc.ref));
-  await batch.commit();
-  const batch2 = db.batch();
-  sorArray.forEach(item => {
-    // remove id if present
-    const copy = {...item}; delete copy._id;
-    const ref = col.doc();
-    batch2.set(ref, copy);
-  });
-  await batch2.commit();
-}
-
-/* UI: render editable rows */
-async function renderSOR(){
-  const arr = await fetchSORFromServer();
+/* Render from snapshot */
+function renderSORFromDocs(docs){
   const body = document.getElementById('sorBody');
   body.innerHTML = '';
-  if(!arr.length){ body.innerHTML = '<tr><td colspan="12" class="small">No depots</td></tr>'; return; }
-  arr.forEach((d, idx) => {
+  if(!docs.length){ body.innerHTML = '<tr><td colspan="12" class="small">No depots</td></tr>'; return; }
+  docs.forEach(d => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td><input data-field="depotName" value="${escapeHtml(d.depotName||'')}" /></td>
-      <td><input data-field="agency" value="${escapeHtml(d.agency||'')}" /></td>
-      <td><input data-field="unloading" value="${d.unloading||''}" /></td>
-      <td><input data-field="receipt10" value="${d.receipt10||''}" /></td>
-      <td><input data-field="receipt16" value="${d.receipt16||''}" /></td>
-      <td><input data-field="receipt20" value="${d.receipt20||''}" /></td>
-      <td><input data-field="receiptBeyond" value="${d.receiptBeyond||''}" /></td>
-      <td><input data-field="issues" value="${d.issues||''}" /></td>
-      <td><input data-field="transportation" value="${d.transportation||''}" /></td>
-      <td><input data-field="asor" value="${d.asor||''}" /></td>
-      <td><input data-field="supervision" value="${d.supervision||''}" /></td>
+    tr.dataset.id = d.id || '';
+    tr.innerHTML = `<td><input data-field="depotName" value="${escapeHtml(d.data().depotName||'')}" /></td>
+      <td><input data-field="agency" value="${escapeHtml(d.data().agency||'')}" /></td>
+      <td><input data-field="unloading" value="${d.data().unloading||''}" /></td>
+      <td><input data-field="receipt10" value="${d.data().receipt10||''}" /></td>
+      <td><input data-field="receipt16" value="${d.data().receipt16||''}" /></td>
+      <td><input data-field="receipt20" value="${d.data().receipt20||''}" /></td>
+      <td><input data-field="receiptBeyond" value="${d.data().receiptBeyond||''}" /></td>
+      <td><input data-field="issues" value="${d.data().issues||''}" /></td>
+      <td><input data-field="transportation" value="${d.data().transportation||''}" /></td>
+      <td><input data-field="asor" value="${d.data().asor||''}" /></td>
+      <td><input data-field="supervision" value="${d.data().supervision||''}" /></td>
       <td><button class="delBtn">Delete</button></td>`;
-    tr.dataset.id = d._id || '';
     body.appendChild(tr);
-    tr.querySelector('.delBtn').addEventListener('click', ()=>{ tr.remove(); });
+    tr.querySelector('.delBtn').addEventListener('click', ()=> tr.remove());
   });
 }
 
 /* Add a blank row for new depot */
-function addBlankRow(){
-  const body = document.getElementById('sorBody');
-  const tr=document.createElement('tr');
-  tr.innerHTML = `<td><input data-field="depotName" value="" /></td>
-    <td><input data-field="agency" value="" /></td>
-    <td><input data-field="unloading" value="" /></td>
-    <td><input data-field="receipt10" value="" /></td>
-    <td><input data-field="receipt16" value="" /></td>
-    <td><input data-field="receipt20" value="" /></td>
-    <td><input data-field="receiptBeyond" value="" /></td>
-    <td><input data-field="issues" value="" /></td>
-    <td><input data-field="transportation" value="" /></td>
-    <td><input data-field="asor" value="" /></td>
-    <td><input data-field="supervision" value="" /></td>
-    <td><button class="delBtn">Delete</button></td>`;
-  body.prepend(tr);
-  tr.querySelector('.delBtn').addEventListener('click', ()=> tr.remove());
-}
+function addBlankRow(){ const body=document.getElementById('sorBody'); const tr=document.createElement('tr'); tr.innerHTML = `<td><input data-field="depotName" value="" /></td><td><input data-field="agency" value="" /></td><td><input data-field="unloading" value="" /></td><td><input data-field="receipt10" value="" /></td><td><input data-field="receipt16" value="" /></td><td><input data-field="receipt20" value="" /></td><td><input data-field="receiptBeyond" value="" /></td><td><input data-field="issues" value="" /></td><td><input data-field="transportation" value="" /></td><td><input data-field="asor" value="" /></td><td><input data-field="supervision" value="" /></td><td><button class="delBtn">Delete</button></td>`; body.prepend(tr); tr.querySelector('.delBtn').addEventListener('click', ()=> tr.remove()); }
 
-/* Gather table rows into array and save to server */
+/* Save all rows to Firestore (replace collection) */
 async function saveAll(){
   const rows = Array.from(document.querySelectorAll('#sorBody tr'));
   const out = [];
@@ -137,24 +98,38 @@ async function saveAll(){
     const inputs = tr.querySelectorAll('input[data-field]');
     if(!inputs || inputs.length===0) return;
     const obj = {};
-    inputs.forEach(inp => {
-      const f = inp.getAttribute('data-field'); obj[f] = inp.value;
-    });
-    // ignore empty depotName
+    inputs.forEach(inp => { const f = inp.getAttribute('data-field'); obj[f] = inp.value; });
     if((obj.depotName||'').trim()) out.push(obj);
   });
-  await saveSORToServer(out);
+  // Replace collection: delete existing docs then add new ones
+  const col = db.collection('sor');
+  const existing = await col.get();
+  const batch = db.batch();
+  existing.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+  const batch2 = db.batch();
+  out.forEach(item=>{
+    const ref = col.doc();
+    batch2.set(ref, item);
+  });
+  await batch2.commit();
   alert('Saved to server.');
-  await renderSOR();
+}
+
+/* Realtime listener: render when collection changes */
+let sorUnsub = null;
+function startSorRealtime(){
+  if(sorUnsub) sorUnsub();
+  sorUnsub = db.collection('sor').orderBy('depotName').onSnapshot(snapshot => {
+    renderSORFromDocs(snapshot.docs);
+  }, err => console.error('sor onSnapshot err', err));
 }
 
 /* Init */
 document.addEventListener('DOMContentLoaded', async ()=>{
   document.getElementById('addDepotBtn').addEventListener('click', addBlankRow);
   document.getElementById('saveAllBtn').addEventListener('click', saveAll);
-  await renderSOR();
-  // realtime update: re-render when collection changes
-  db.collection('sor').onSnapshot(()=>{ renderSOR(); });
+  startSorRealtime();
 });
 </script>
 </body>
