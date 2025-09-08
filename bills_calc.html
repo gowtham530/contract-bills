@@ -5,23 +5,41 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Contract Bills — Calculation</title>
 
-<style>
+<!-- Firebase SDKs (compat) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+<script>
+// Firebase config (you supplied)
+const firebaseConfig = {
+  apiKey: "AIzaSyBB8E1qDOs2rNr84xrlOoMWWZLtXXjZZbk",
+  authDomain: "contract-bills.firebaseapp.com",
+  projectId: "contract-bills",
+  storageBucket: "contract-bills.firebasestorage.app",
+  messagingSenderId: "935565138529",
+  appId: "1:935565138529:web:ab847b0704ecdb4e746820",
+  measurementId: "G-QT4FW1WGYB"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+</script>
+
+<style>
   :root{--bg1:#071226;--bg2:#041827;--muted:#9fb0bf;--accent:#7dd3fc}
   *{box-sizing:border-box}
   body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial;
        background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#eaf6f2;padding:22px}
   .wrap{max-width:1100px;margin:0 auto;background:linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
         padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.02)}
-  h1{margin:0 0 10px 0;font-weight:900}
+  h1{margin:0 0 6px 0;font-weight:900}
   .grid{display:grid;grid-template-columns:1fr 360px;gap:18px}
   @media (max-width:980px){ .grid{grid-template-columns:1fr} }
   .card{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px}
-  .row{display:grid;grid-template-columns:320px 1fr;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.02)}
+  .row{display:grid;grid-template-columns:300px 1fr;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.02)}
   .label{color:var(--muted);font-weight:800;font-size:0.95rem;font-family:inherit}
   input[type="text"], input[type="number"], select{ width:100%;padding:9px;border-radius:6px;border:1px solid #ccc;font-size:0.95rem;font-family:inherit; }
   .topActions{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  .btn{ padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06); background:#0f2b42; color:var(--accent); cursor:pointer; font-weight:800; }
+  .btn{ padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06); background:#0f2b42; color:var(--accent); cursor:pointer; font-weight:800; text-decoration:none; }
   .btn-primary{ background:linear-gradient(90deg,#7EE7C6,#B78CFF); color:#042b28; border:0; }
   .btn-danger{ background:linear-gradient(90deg,#FF9AA2,#FF6D6D); color:#200; border:0; font-weight:900; }
   .sectionTitle{font-weight:900;margin:12px 0 8px}
@@ -30,32 +48,29 @@
   table.compact{width:100%;border-collapse:collapse;margin-bottom:8px}
   table.compact th, table.compact td{border:1px solid rgba(255,255,255,0.03);padding:8px;text-align:right}
   table.compact th:first-child, table.compact td:first-child{ text-align:left;}
-  .small {width:140px}
-  input:focus, select:focus { outline:3px solid rgba(125,211,252,0.18) }
-  input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-  input[type=number] { -moz-appearance: textfield; }
   .previewLabel{color:var(--muted);font-size:0.9rem;margin-top:8px}
   .previewValue{font-weight:900;font-size:1.05rem;margin-bottom:6px}
   .muted-small{font-size:0.9rem;color:#bcd}
+  input:focus, select:focus { outline:3px solid rgba(125,211,252,0.12) }
 </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Contract Bills — Calculation</h1>
+    <div class="topActions">
+      <a href="index.html" class="btn" style="text-decoration:none">← Home</a>
+      <button id="createNewBtn" class="btn">Create New</button>
+      <button id="loadBtn" class="btn">Load Bill</button>
+      <button id="saveBtn" class="btn btn-primary">Save Bill</button>
+      <button id="deleteBtn" class="btn btn-danger">Delete</button>
+    </div>
+
     <div class="grid">
       <section class="card">
         <div id="sorNotice" style="display:none;color:#ffd;background:rgba(255,255,255,0.02);padding:8px;border-radius:6px;margin-bottom:10px"></div>
 
-        <div class="topActions">
-          <a href="index.html" class="btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px">← Home</a>
-          <button id="createNewBtn" class="btn">Create New</button>
-          <button id="loadBtn" class="btn">Load Bill</button>
-          <button id="saveBtn" class="btn btn-primary">Save Bill</button>
-          <button id="deleteBtn" class="btn btn-danger">Delete</button>
-        </div>
-
         <div class="row"><div class="label">Depot</div><div><select id="A1"></select></div></div>
-        <div class="row"><div class="label">Bill No</div><div><div id="A2wrap"><input id="A2" type="text" /></div><div class="muted-small">Load Bill makes this a list; selecting restores it as text.</div></div></div>
+        <div class="row"><div class="label">Bill No</div><div><div id="A2wrap"><input id="A2" type="text" /></div></div></div>
         <div class="row"><div class="label">Agency</div><div><input id="A3" type="text" readonly /></div></div>
 
         <div class="sectionTitle">Wagon Receipt</div>
@@ -137,31 +152,62 @@
   </div>
 
 <script>
-/* Storage keys */
-const SOR_KEY = 'sorData_v1';
-const BILLS_KEY = 'bills';
-const OPEN_KEY = 'bill_to_open';
-
-/* State */
-let sorMap = {};
-let loadedBillIndex = null;
-let loadModeActive = false;
-const inputOrder = ["A1","A2","A4","A5","A7","A8","A13","A15","A17","A19","A23","A24","A26","A27","A43","A44"];
-
-/* Formatters */
+/* ---------- Utilities ---------- */
 function fmtMoney(n){ const num = Number(String(n||0).replace(/,/g,'')); return isFinite(num)?num.toFixed(2):'0.00'; }
 function fmtWeight(n){ const num = Number(String(n||0).replace(/,/g,'')); return isFinite(num)?num.toFixed(6):'0.000000'; }
 function parseNum(v){ if(v===null||v===undefined||v==='') return 0; const n=Number(String(v).replace(/,/g,'')); return isFinite(n)?n:0; }
 
-/* Load SOR */
-function loadSOR(){
-  const raw = localStorage.getItem(SOR_KEY);
-  let arr = null;
-  try { arr = raw ? JSON.parse(raw) : null; } catch(e){ arr = null; console.warn('SOR parse err', e); }
-  sorMap = {};
-  if(Array.isArray(arr) && arr.length){
+/* ---------- Firestore-backed persistence ---------- */
+async function fetchSORFromServer(){
+  const snap = await db.collection('sor').orderBy('depotName').get();
+  const arr = [];
+  snap.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
+  return arr;
+}
+async function fetchBillsFromServer(){
+  const snap = await db.collection('bills').orderBy('savedAt','desc').get();
+  const arr = [];
+  snap.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
+  return arr;
+}
+async function saveBillToServer(billObj){
+  if(billObj._id){
+    const id = billObj._id;
+    const copy = {...billObj}; delete copy._id;
+    await db.collection('bills').doc(id).set(copy, {merge:true});
+    return id;
+  } else {
+    billObj.savedAt = new Date().toISOString();
+    const ref = await db.collection('bills').add(billObj);
+    return ref.id;
+  }
+}
+async function deleteBillFromServer(id){
+  if(!id) throw new Error('missing id');
+  await db.collection('bills').doc(id).delete();
+}
+
+/* ---------- in-memory SOR map (populated from Firestore) ---------- */
+let sorMap = {};
+let loadedBillId = null;
+let loadModeActive = false;
+
+/* Populate depot select from sorMap */
+function populateDepots(){
+  const s = document.getElementById('A1'); s.innerHTML = '';
+  const keys = Object.keys(sorMap).sort();
+  if(!keys.length){ const opt=document.createElement('option'); opt.value=''; opt.textContent='No depots'; s.appendChild(opt); return; }
+  keys.forEach(k => { const o=document.createElement('option'); o.value = k; o.textContent = k; s.appendChild(o); });
+}
+
+/* Fetch SOR from server and populate sorMap */
+async function loadSORFromServer(){
+  try{
+    const arr = await fetchSORFromServer();
+    sorMap = {};
     arr.forEach(it=>{
-      const name = (it.depotName||'').trim(); if(!name) return;
+      const name = (it.depotName||'').trim();
+      if(!name) return;
       let asor = parseNum(it.asor); if(asor>1) asor = asor/100;
       let sup = parseNum(it.supervision); if(sup>1) sup = sup/100;
       sorMap[name] = {
@@ -176,25 +222,24 @@ function loadSOR(){
         asor, supervision: sup
       };
     });
-    showSorNotice(`Loaded ${Object.keys(sorMap).length} depot(s) from SOR Manager.`);
-  } else {
-    showSorNotice('No depots found in SOR Manager; using sample depots.');
-    sorMap = {
-      "FSD MG Complex": { agency:"FCI", unloading:5, receipt10:2, receipt16:2.5, receipt20:3, receiptBeyond:4, issues:6, transportation:0.8, asor:0.05, supervision:0.01 },
-      "MG Complex(MVN)": { agency:"CWC", unloading:4, receipt10:1.5, receipt16:2, receipt20:2.5, receiptBeyond:3.5, issues:5.5, transportation:0.75, asor:0.04, supervision:0.012 }
-    };
-  }
-  populateDepots();
+    populateDepots();
+    showSorNotice(`Loaded ${Object.keys(sorMap).length} depot(s) from server`);
+  }catch(e){ console.error('loadSORFromServer', e); showSorNotice('Error loading SOR from server'); }
 }
-function showSorNotice(m){ const n=document.getElementById('sorNotice'); if(!n) return; n.style.display='block'; n.innerText = m; setTimeout(()=>n.style.display='none',3800); }
-function populateDepots(){ const s=document.getElementById('A1'); s.innerHTML=''; const keys=Object.keys(sorMap).sort(); if(!keys.length){ const o=document.createElement('option'); o.value=''; o.textContent='No depots'; s.appendChild(o); return; } keys.forEach(k=>{ const o=document.createElement('option'); o.value=k; o.textContent=k; s.appendChild(o); }); }
 
-/* Setters */
+/* Realtime listeners to keep UI in sync immediately */
+function startRealtimeListeners(){
+  db.collection('sor').onSnapshot(()=>{ loadSORFromServer(); });
+  db.collection('bills').onSnapshot(()=>{ refreshSavedList(); });
+}
+
+/* ---------- UI helpers & recalc ---------- */
+function showSorNotice(m){ const n=document.getElementById('sorNotice'); if(!n) return; n.style.display='block'; n.innerText = m; setTimeout(()=>n.style.display='none',3500); }
+
 function setAmt(id,v){ const el=document.getElementById(id); if(!el) return; el.value = fmtMoney(v); }
 function setW(id,v){ const el=document.getElementById(id); if(!el) return; el.value = fmtWeight(v); }
 function setInt(id,v){ const el=document.getElementById(id); if(!el) return; el.value = String(Math.trunc(Number(v)||0)); }
 
-/* Recalc implementing your formulas */
 function recalcAll(){
   const depot = (document.getElementById('A1').value||'').trim();
   const cfg = sorMap[depot] || {};
@@ -274,9 +319,27 @@ function recalcAll(){
   document.getElementById('preview_nett').innerText  = '₹' + fmtMoney(A46 || 0);
 }
 
-/* Enter navigation & wheel prevention */
+/* ---------- Saved list ---------- */
+async function refreshSavedList(){
+  try{
+    const bills = await fetchBillsFromServer();
+    const el = document.getElementById('savedList');
+    if(!bills.length){ el.innerText='No saved bills'; return; }
+    el.innerHTML='';
+    bills.slice().forEach(b => {
+      const d=document.createElement('div');
+      d.style.padding='6px 0';
+      d.innerHTML = `<div style="font-weight:700">${b.A2||'—'} — ${b.A1||'—'}</div>
+        <div class="muted-small">Gross ₹${fmtMoney(b.A41||0)} • Nett ₹${fmtMoney(b.A46||0)}</div>`;
+      el.appendChild(d);
+    });
+  }catch(e){ console.error(e); }
+}
+
+/* ---------- Create / Load / Save / Delete (Firestore-backed) ---------- */
 function enableEnterNav(){
-  const present = inputOrder.filter(id => document.getElementById(id));
+  const order = ["A1","A2","A4","A5","A7","A8","A13","A15","A17","A19","A23","A24","A26","A27","A43","A44"];
+  const present = order.filter(id => document.getElementById(id));
   const all = Array.from(document.querySelectorAll('input,select')).filter(el => el.tagName==='INPUT' || el.tagName==='SELECT');
   all.forEach(el => el.addEventListener('keydown', function(e){
     if(e.key === 'Enter'){ e.preventDefault();
@@ -290,102 +353,91 @@ function enableEnterNav(){
         for(let j=0;j<all.length;j++){ if(all[j] && !all[j].readOnly){ all[j].focus(); if(all[j].select) all[j].select(); return; } }
       }
     }
-  })); }
+  }));
+}
 function preventWheel(){ document.addEventListener('wheel', function(e){ const a=document.activeElement; if(a && a.tagName==='INPUT' && a.type==='number'){ e.preventDefault(); } }, { passive:false }); }
 
-/* Bills storage */
-function loadBills(){ try { return JSON.parse(localStorage.getItem(BILLS_KEY) || '[]'); } catch(e){ return []; } }
-function saveBills(arr){ localStorage.setItem(BILLS_KEY, JSON.stringify(arr)); }
-
-/* Saved list */
-function refreshSavedList(){ const arr = loadBills(); const el = document.getElementById('savedList'); if(!arr.length){ el.innerText='No saved bills'; return; } el.innerHTML=''; arr.slice().reverse().forEach(b=>{ const d=document.createElement('div'); d.style.padding='6px 0'; d.innerHTML = `<div style="font-weight:700">${b.A2||'—'} — ${b.A1||'—'}</div><div class="muted-small">Gross ₹${fmtMoney(b.A41||0)} • Nett ₹${fmtMoney(b.A46||0)}</div>`; el.appendChild(d); }); }
-
-/* Create / Load / Save / Delete */
-function createNew(){ const keep=document.getElementById('A1').value; for(let i=1;i<=46;i++){ const el=document.getElementById('A'+i); if(!el) continue; if('A1'==='A'+i) continue; el.value=''; } loadedBillIndex=null; loadModeActive=false; exitLoadMode(); onDepotChange(); recalcAll(); }
+function createNew(){
+  for(let i=1;i<=46;i++){ const el=document.getElementById('A'+i); if(!el) continue; if('A1'==='A'+i) continue; el.value=''; }
+  loadedBillId = null; loadModeActive=false; exitLoadMode(); recalcAll();
+}
 
 function enterLoadMode(){
   for(let i=1;i<=46;i++){ const el=document.getElementById('A'+i); if(!el) continue; if(el.id==='A1') continue; el.value=''; }
-  loadedBillIndex=null; loadModeActive=true;
+  loadedBillId = null; loadModeActive=true;
   const wrap=document.getElementById('A2wrap'); const cur=wrap.querySelector('#A2');
-  if(cur && cur.tagName.toLowerCase() === 'select'){ populateLoadSelect(cur); cur.focus(); return; }
   const sel=document.createElement('select'); sel.id='A2'; sel.style.width='100%';
   populateLoadSelect(sel);
-  sel.addEventListener('change', function(){ const val=this.value; if(val==='') return; if(val==='__show_all__'){ populateLoadSelect(this, true); return; } loadBillIntoForm(Number(val)); });
+  sel.addEventListener('change', function(){ const val=this.value; if(val==='') return; if(val==='__show_all__'){ populateLoadSelect(this, true); return; } loadBillIntoFormById(val); });
   if(wrap && cur) wrap.replaceChild(sel, cur);
   sel.focus();
 }
 
-function populateLoadSelect(sel, showAll=false){
+async function populateLoadSelect(sel, showAll=false){
   sel.innerHTML=''; const empty=document.createElement('option'); empty.value=''; empty.textContent='-- select bill --'; sel.appendChild(empty);
-  const depot=document.getElementById('A1').value||''; const arr=loadBills();
-  const list = showAll ? arr.map((b,i)=>({b,i})) : arr.map((b,i)=>({b,i})).filter(x => (depot? (x.b.A1||'')===depot : true));
+  const depot=document.getElementById('A1').value||''; const arr = await fetchBillsFromServer();
+  const list = showAll ? arr : arr.filter(x => depot ? (x.A1||'')===depot : true);
   if(list.length===0){ const none=document.createElement('option'); none.value='__none__'; none.textContent='No bills for selected depot'; none.disabled=true; sel.appendChild(none); const all=document.createElement('option'); all.value='__show_all__'; all.textContent='— Show all bills —'; sel.appendChild(all); return; }
-  list.forEach(it => { const b=it.b; const idx=it.i; const label = `${b.A2||'—'} — ${b.A1||'—'} (${ b.savedAt ? (new Date(b.savedAt)).toLocaleString() : 'unsaved' })`; const opt=document.createElement('option'); opt.value=idx; opt.textContent=label; sel.appendChild(opt); });
+  list.forEach(b => { const opt=document.createElement('option'); opt.value = b._id; opt.textContent = `${b.A2||'—'} — ${b.A1||'—'} (${ b.savedAt ? (new Date(b.savedAt)).toLocaleString() : 'unsaved' })`; sel.appendChild(opt); });
 }
 
-function exitLoadMode(){ const wrap=document.getElementById('A2wrap'); const cur = wrap ? wrap.querySelector('#A2') : null; if(!cur) return; if(cur.tagName.toLowerCase()==='input') return; const input=document.createElement('input'); input.id='A2'; input.type='text'; if(cur.tagName.toLowerCase()==='select' && cur.value && cur.value!=='' && cur.value!=='__show_all__' && cur.value!=='__none__'){ const stored = loadBills()[Number(cur.value)]; if(stored) input.value = stored.A2 || ''; } wrap.replaceChild(input, cur); enableEnterNav(); }
+function exitLoadMode(){ const wrap=document.getElementById('A2wrap'); const cur = wrap ? wrap.querySelector('#A2') : null; if(!cur) return; if(cur.tagName.toLowerCase()==='input') return; const input=document.createElement('input'); input.id='A2'; input.type='text'; if(cur.tagName.toLowerCase()==='select' && cur.value && cur.value!=='' && cur.value!=='__show_all__' && cur.value!=='__none__'){ const storedId = cur.value; (async ()=>{ try{ const doc = await db.collection('bills').doc(storedId).get(); if(doc.exists){ const stored = doc.data(); input.value = stored.A2 || ''; } }catch(e){console.warn(e);} })(); } wrap.replaceChild(input, cur); enableEnterNav(); }
 
-function loadBillIntoForm(index){
-  const arr = loadBills(); const rec = arr[index]; if(!rec){ alert('Selected bill not found'); return; }
-  for(let i=1;i<=46;i++){ const id='A'+i; const el=document.getElementById(id); if(!el) continue; if(el.readOnly && el.type==='text') el.value = fmtMoney(rec[id]); else el.value = rec[id] || ''; }
-  loadedBillIndex = index; exitLoadMode(); const a2=document.getElementById('A2'); if(a2) a2.value = rec.A2 || ''; const depot=(document.getElementById('A1').value||'').trim(); const cfg=sorMap[depot]||{}; if(cfg && cfg.agency) document.getElementById('A3').value = cfg.agency; recalcAll(); alert('Bill loaded.'); 
+async function loadBillIntoFormById(id){
+  const doc = await db.collection('bills').doc(id).get();
+  if(!doc.exists){ alert('Selected bill not found'); return; }
+  const rec = doc.data(); rec._id = doc.id;
+  for(let i=1;i<=46;i++){ const el=document.getElementById('A'+i); if(!el) continue; el.value = rec['A'+i] || ''; }
+  loadedBillId = rec._id; exitLoadMode(); if(document.getElementById('A2')) document.getElementById('A2').value = rec.A2 || ''; if(sorMap[document.getElementById('A1').value]) document.getElementById('A3').value = sorMap[document.getElementById('A1').value].agency || ''; recalcAll(); alert('Bill loaded.');
 }
 
-function saveCurrent(){
+async function saveCurrent(){
   const billNo = (document.getElementById('A2') && document.getElementById('A2').value || '').trim(); if(!billNo){ alert('Enter Bill No before saving'); return; }
   const depot = (document.getElementById('A1').value || '').trim(); if(!depot){ alert('Select Depot before saving'); return; }
-  const arr = loadBills(); const rec = {}; for(let i=1;i<=46;i++){ const id='A'+i; const el=document.getElementById(id); rec[id] = el ? el.value : ''; } rec.savedAt = new Date().toISOString();
-  if(loadedBillIndex !== null && arr[loadedBillIndex]){ arr[loadedBillIndex] = rec; } else {
-    const idx = arr.findIndex(b => (b.A1||'')===depot && (b.A2||'')===billNo);
-    if(idx >= 0){ if(!confirm('A bill with same Depot and Bill No exists. Overwrite?')) return; arr[idx] = rec; loadedBillIndex = idx; } else { arr.push(rec); loadedBillIndex = arr.length - 1; }
-  }
-  saveBills(arr); refreshSavedList(); alert('Saved.');
+  const rec = {};
+  for(let i=1;i<=46;i++){ const id='A'+i; const el=document.getElementById(id); rec[id] = el ? el.value : ''; }
+  rec.savedAt = new Date().toISOString();
+  if(loadedBillId) rec._id = loadedBillId;
+  try{
+    const id = await saveBillToServer(rec);
+    loadedBillId = id; refreshSavedList(); alert('Saved.');
+  }catch(e){ console.error(e); alert('Save failed: '+e.message); }
 }
 
-function deleteLoaded(){ if(loadedBillIndex===null){ alert('No loaded bill. Use Load Bill to pick one.'); return; } if(!confirm('Delete this bill permanently?')) return; const arr=loadBills(); arr.splice(loadedBillIndex,1); saveBills(arr); loadedBillIndex=null; refreshSavedList(); createNew(); alert('Deleted.'); }
+async function deleteLoaded(){ if(!loadedBillId){ alert('No loaded bill. Use Load Bill to pick one.'); return; } if(!confirm('Delete this bill permanently?')) return; try{ await deleteBillFromServer(loadedBillId); loadedBillId=null; refreshSavedList(); createNew(); alert('Deleted.'); }catch(e){ console.error(e); alert('Delete failed'); } }
 
-document.addEventListener('DOMContentLoaded', function(){
-  loadSOR();
-  const first = Object.keys(sorMap)[0]; if(first) document.getElementById('A1').value = first; if(sorMap[first]) document.getElementById('A3').value = sorMap[first].agency || '';
+/* ---------- Initialization ---------- */
+function attachReactive(){
   const reactive = ["A1","A2","A3","A4","A5","A7","A8","A13","A15","A17","A19","A23","A24","A26","A27","A43","A44"];
   reactive.forEach(id => { const el=document.getElementById(id); if(!el) return; el.addEventListener('input', recalcAll); el.addEventListener('change', recalcAll); });
-  document.getElementById('createNewBtn').addEventListener('click', createNew); document.getElementById('loadBtn').addEventListener('click', enterLoadMode); document.getElementById('saveBtn').addEventListener('click', saveCurrent); document.getElementById('deleteBtn').addEventListener('click', deleteLoaded);
-  document.getElementById('printBtn').addEventListener('click', ()=>window.print()); document.getElementById('resetBtn').addEventListener('click', ()=> { if(confirm('Reset all inputs?')) createNew(); });
+}
+
+document.addEventListener('DOMContentLoaded', async function(){
+  await loadSORFromServer();
+  startRealtimeListeners();
+  const first = Object.keys(sorMap)[0]; if(first) { document.getElementById('A1').value = first; if(sorMap[first]) document.getElementById('A3').value = sorMap[first].agency || ''; }
+  attachReactive();
+  document.getElementById('createNewBtn').addEventListener('click', createNew);
+  document.getElementById('loadBtn').addEventListener('click', enterLoadMode);
+  document.getElementById('saveBtn').addEventListener('click', saveCurrent);
+  document.getElementById('deleteBtn').addEventListener('click', deleteLoaded);
+  document.getElementById('printBtn').addEventListener('click', ()=>window.print());
+  document.getElementById('resetBtn').addEventListener('click', ()=> { if(confirm('Reset all inputs?')) createNew(); });
   document.getElementById('A1').addEventListener('change', function(){ const dv=(this.value||'').trim(); const cfg=sorMap[dv]||{}; document.getElementById('A3').value = cfg.agency || ''; if(loadModeActive) enterLoadMode(); recalcAll(); });
   enableEnterNav(); preventWheel(); refreshSavedList(); recalcAll();
 
-  const payload = localStorage.getItem(OPEN_KEY);
+  // If opened from bills_data (bill_to_open), fetch that bill by _id
+  const payload = localStorage.getItem('bill_to_open');
   if(payload){
     try {
-      const p = JSON.parse(payload); const arr = loadBills();
-      if(p.idx != null && arr[p.idx]){ if(p.A1) document.getElementById('A1').value = p.A1; onDepotChange(); loadBillIntoForm(Number(p.idx)); }
-      else if(p.A1 && p.A2){ const idx = arr.findIndex(b => (b.A1||'')===p.A1 && (b.A2||'')===p.A2); if(idx >= 0){ document.getElementById('A1').value = p.A1; onDepotChange(); loadBillIntoForm(idx); } }
+      const p = JSON.parse(payload);
+      if(p && p._id){
+        await loadBillIntoFormById(p._id);
+      }
     } catch(e){ console.warn(e); }
-    localStorage.removeItem(OPEN_KEY);
+    localStorage.removeItem('bill_to_open');
   }
-
-  window.addEventListener('storage', (ev)=>{ if(ev.key === SOR_KEY){ loadSOR(); recalcAll(); } else if(ev.key === BILLS_KEY){ refreshSavedList(); if(loadModeActive) enterLoadMode(); } });
 });
-
-function loadSOR(){
-  const raw = localStorage.getItem(SOR_KEY);
-  let arr = null;
-  try { arr = raw ? JSON.parse(raw) : null; } catch(e){ arr=null; console.warn(e); }
-  sorMap = {};
-  if(Array.isArray(arr) && arr.length){
-    arr.forEach(it=>{
-      const name = (it.depotName||'').trim(); if(!name) return;
-      let asor = parseNum(it.asor); if(asor>1) asor = asor/100;
-      let sup = parseNum(it.supervision); if(sup>1) sup = sup/100;
-      sorMap[name] = { agency:String(it.agency||'').trim(), unloading:parseNum(it.unloading), receipt10:parseNum(it.receipt10), receipt16:parseNum(it.receipt16), receipt20:parseNum(it.receipt20), receiptBeyond:parseNum(it.receiptBeyond), issues:parseNum(it.issues), transportation:parseNum(it.transportation), asor, supervision: sup };
-    });
-  } else {
-    sorMap = { "FSD MG Complex": { agency:"FCI", unloading:5, receipt10:2, receipt16:2.5, receipt20:3, receiptBeyond:4, issues:6, transportation:0.8, asor:0.05, supervision:0.01 }, "MG Complex(MVN)": { agency:"CWC", unloading:4, receipt10:1.5, receipt16:2, receipt20:2.5, receiptBeyond:3.5, issues:5.5, transportation:0.75, asor:0.04, supervision:0.012 } };
-  }
-  populateDepots();
-}
-
-function onDepotChange(){ const depot=(document.getElementById('A1').value||'').trim(); const cfg=sorMap[depot]||{}; document.getElementById('A3').value = cfg.agency || ''; recalcAll(); }
 </script>
 </body>
 </html>
