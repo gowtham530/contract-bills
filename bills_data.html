@@ -40,6 +40,13 @@ const db = firebase.firestore();
   .small{font-size:0.9rem;color:var(--muted)}
   .btn{padding:6px 10px;border-radius:6px;border:0;cursor:pointer;font-weight:700}
   .btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--accent)}
+
+  /* Toasts */
+  .toast-wrap{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+  .toast{min-width:220px;padding:10px 14px;border-radius:8px;background:rgba(0,0,0,0.8);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.6);font-weight:700}
+  .toast.success{background:linear-gradient(90deg,#7EE7C6,#38b29a);color:#042b28}
+  .toast.error{background:linear-gradient(90deg,#ff7b7b,#ff4d4d);color:#200}
+  .toast.info{background:linear-gradient(90deg,#7dd3fc,#4ca0d6);color:#042b28}
 </style>
 </head>
 <body>
@@ -74,7 +81,21 @@ const db = firebase.firestore();
     </table>
   </div>
 
+  <!-- Toast wrapper -->
+  <div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="true"></div>
+
 <script>
+/* Toast */
+function showToast(msg, type='info', timeout=3000){
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type==='success' ? 'success' : type==='error' ? 'error' : 'info');
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(()=>{ t.style.transition='opacity 300ms'; t.style.opacity='0'; setTimeout(()=>t.remove(),350); }, timeout);
+}
+
+/* Helpers */
 function amountDisplay(v){ const n = Number(String(v||0).replace(/,/g,'')); return isFinite(n)?n.toFixed(2):'0.00'; }
 function fmtDate(iso){ if(!iso) return '—'; try { return new Date(iso).toLocaleString(); } catch(e){ return iso; } }
 function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -105,49 +126,53 @@ function renderFromArray(all){
   });
 }
 
-/* Realtime: subscribe to bills with onSnapshot and render from snapshot */
+/* Realtime: subscribe to bills and render from snapshot */
 let billsUnsub = null;
 function startBillsRealtime(){
   if(billsUnsub) billsUnsub();
   billsUnsub = db.collection('bills').orderBy('savedAt','desc').onSnapshot(snapshot=>{
     const arr = [];
-    snapshot.forEach(doc => { const d=doc.data(); d._id = doc.id; arr.push(d); });
+    snapshot.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
     renderFromArray(arr);
-  }, err => console.error('bills onSnapshot err', err));
+    showToast('Bills list updated', 'info', 1500);
+  }, err => { console.error('bills onSnapshot err', err); showToast('Realtime error', 'error', 3000); });
 }
 
-/* Export helpers */
+/* Export */
 async function exportAllJson(){ const snap = await db.collection('bills').orderBy('savedAt','desc').get(); const arr = []; snap.forEach(doc => { const d=doc.data(); d._id=doc.id; arr.push(d); }); return arr; }
 
 document.getElementById('searchText').addEventListener('input', ()=>{
-  // quick re-render by fetching snapshot once (or rely on last snapshot)
-  // easier: just fetch current docs and render
   db.collection('bills').orderBy('savedAt','desc').get().then(snap => {
     const arr=[]; snap.forEach(doc=>{ const d=doc.data(); d._id=doc.id; arr.push(d); }); renderFromArray(arr);
   });
 });
 
 document.getElementById('exportCsv').addEventListener('click', async ()=>{
-  const arr = await exportAllJson();
-  if(!arr.length){ alert('No bills to export'); return; }
-  const keys = Array.from(new Set(arr.flatMap(o => Object.keys(o)))).sort();
-  const header = keys.join(',');
-  const lines = arr.map(row => keys.map(k => `"${String(row[k]||'').replace(/"/g,'""')}"`).join(','));
-  const csv = [header].concat(lines).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'bills_export.csv'; a.click(); URL.revokeObjectURL(url);
+  try{
+    const arr = await exportAllJson();
+    if(!arr.length){ showToast('No bills to export', 'info'); return; }
+    const keys = Array.from(new Set(arr.flatMap(o => Object.keys(o)))).sort();
+    const header = keys.join(',');
+    const lines = arr.map(row => keys.map(k => `"${String(row[k]||'').replace(/"/g,'""')}"`).join(','));
+    const csv = [header].concat(lines).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'bills_export.csv'; a.click(); URL.revokeObjectURL(url);
+    showToast('Exported CSV', 'success');
+  }catch(e){ console.error(e); showToast('Export failed', 'error', 4000); }
 });
 
 document.getElementById('exportJson').addEventListener('click', async ()=>{
-  const arr = await exportAllJson();
-  if(!arr.length){ alert('No bills to export'); return; }
-  const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'bills_export.json'; a.click(); URL.revokeObjectURL(url);
+  try{
+    const arr = await exportAllJson();
+    if(!arr.length){ showToast('No bills to export', 'info'); return; }
+    const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'bills_export.json'; a.click(); URL.revokeObjectURL(url);
+    showToast('Exported JSON', 'success');
+  }catch(e){ console.error(e); showToast('Export failed', 'error', 4000); }
 });
 
-/* Start realtime on DOM ready */
 document.addEventListener('DOMContentLoaded', ()=>{
   startBillsRealtime();
 });
