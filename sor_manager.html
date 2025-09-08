@@ -37,7 +37,13 @@ const db = firebase.firestore();
   input, select { padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.04); background:transparent;color:inherit }
   .actions{display:flex;gap:8px}
   .small{font-size:0.9rem;color:#bcd}
-
+  .row-actions{display:flex;gap:6px}
+  .btn-row{padding:6px 8px;border-radius:6px;border:0;cursor:pointer;font-weight:700}
+  .btn-edit{background:linear-gradient(90deg,#7dd3fc,#4ca0d6);color:#042b28}
+  .btn-save{background:linear-gradient(90deg,#7EE7C6,#38b29a);color:#042b28}
+  .btn-del{background:linear-gradient(90deg,#ff8a8a,#ff4d4d);color:#200}
+  .readonly input{background:transparent;border-color:transparent;color:#bcd}
+  .editable input{background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.08);color:#eaf6f2}
   /* Toasts */
   .toast-wrap{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
   .toast{min-width:220px;padding:10px 14px;border-radius:8px;background:rgba(0,0,0,0.8);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.6);font-weight:700}
@@ -56,14 +62,14 @@ const db = firebase.firestore();
       <button id="saveAllBtn" class="homeBtn">Save All to Server</button>
     </div>
 
-    <table id="sorTable">
+    <table id="sorTable" role="grid" aria-label="SOR Manager">
       <thead>
-        <tr><th>Depot Name</th><th>Agency</th><th>Unloading</th><th>Receipt10</th><th>Receipt16</th><th>Receipt20</th><th>Beyond20</th><th>Issues</th><th>Transport</th><th>ASOR</th><th>Supervision</th><th></th></tr>
+        <tr><th>Depot Name</th><th>Agency</th><th>Unloading</th><th>Receipt10</th><th>Receipt16</th><th>Receipt20</th><th>Beyond20</th><th>Issues</th><th>Transport</th><th>ASOR</th><th>Supervision</th><th>Actions</th></tr>
       </thead>
       <tbody id="sorBody"><tr><td colspan="12" class="small">Loading…</td></tr></tbody>
     </table>
 
-    <div style="margin-top:12px;color:#bcd;font-size:0.9rem">Notes: Use Save All to push the current table content to Firestore. Collection: <code>sor</code>.</div>
+    <div style="margin-top:12px;color:#bcd;font-size:0.9rem">Notes: Use Save All to push the current table content to Firestore. You can edit individual rows by tapping Edit then Save.</div>
   </div>
 
   <div class="toast-wrap" id="toastWrap" aria-live="polite" aria-atomic="true"></div>
@@ -81,55 +87,214 @@ function showToast(msg, type='info', timeout=3000){
 
 function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-/* Render from snapshot */
+/* Firestore helpers */
+async function fetchSORFromServer(){
+  const snap = await db.collection('sor').orderBy('depotName').get();
+  const arr = [];
+  snap.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
+  return arr;
+}
+
+/* Update one doc (merge) */
+async function updateSORRow(id, obj){
+  if(!id){ // create new
+    obj.createdAt = new Date().toISOString();
+    const ref = await db.collection('sor').add(obj);
+    return ref.id;
+  } else {
+    await db.collection('sor').doc(id).set(obj, {merge:true});
+    return id;
+  }
+}
+
+/* Replace entire collection (existing Save All behavior) */
+async function saveAllToServer(sorArray){
+  const col = db.collection('sor');
+  const existing = await col.get();
+  const batch = db.batch();
+  existing.forEach(doc => batch.delete(doc.ref));
+  await batch.commit();
+  const batch2 = db.batch();
+  sorArray.forEach(item => {
+    const ref = col.doc();
+    batch2.set(ref, item);
+  });
+  await batch2.commit();
+}
+
+/* Render rows from docs snapshot */
 function renderSORFromDocs(docs){
   const body = document.getElementById('sorBody');
   body.innerHTML = '';
   if(!docs.length){ body.innerHTML = '<tr><td colspan="12" class="small">No depots</td></tr>'; return; }
+
   docs.forEach(d => {
+    const data = d.data();
+    const id = d.id;
     const tr = document.createElement('tr');
-    tr.dataset.id = d.id || '';
-    tr.innerHTML = `<td><input data-field="depotName" value="${escapeHtml(d.data().depotName||'')}" /></td>
-      <td><input data-field="agency" value="${escapeHtml(d.data().agency||'')}" /></td>
-      <td><input data-field="unloading" value="${d.data().unloading||''}" /></td>
-      <td><input data-field="receipt10" value="${d.data().receipt10||''}" /></td>
-      <td><input data-field="receipt16" value="${d.data().receipt16||''}" /></td>
-      <td><input data-field="receipt20" value="${d.data().receipt20||''}" /></td>
-      <td><input data-field="receiptBeyond" value="${d.data().receiptBeyond||''}" /></td>
-      <td><input data-field="issues" value="${d.data().issues||''}" /></td>
-      <td><input data-field="transportation" value="${d.data().transportation||''}" /></td>
-      <td><input data-field="asor" value="${d.data().asor||''}" /></td>
-      <td><input data-field="supervision" value="${d.data().supervision||''}" /></td>
-      <td><button class="delBtn">Delete</button></td>`;
+    tr.dataset.id = id;
+
+    // Row HTML: inputs are readonly by default (for existing docs)
+    tr.innerHTML = `<td class="cell-depot readonly"><input data-field="depotName" value="${escapeHtml(data.depotName||'')}" readonly /></td>
+      <td class="cell-agency readonly"><input data-field="agency" value="${escapeHtml(data.agency||'')}" readonly /></td>
+      <td class="cell-unloading readonly"><input data-field="unloading" value="${data.unloading||''}" readonly /></td>
+      <td class="cell-r10 readonly"><input data-field="receipt10" value="${data.receipt10||''}" readonly /></td>
+      <td class="cell-r16 readonly"><input data-field="receipt16" value="${data.receipt16||''}" readonly /></td>
+      <td class="cell-r20 readonly"><input data-field="receipt20" value="${data.receipt20||''}" readonly /></td>
+      <td class="cell-b20 readonly"><input data-field="receiptBeyond" value="${data.receiptBeyond||''}" readonly /></td>
+      <td class="cell-issues readonly"><input data-field="issues" value="${data.issues||''}" readonly /></td>
+      <td class="cell-trans readonly"><input data-field="transportation" value="${data.transportation||''}" readonly /></td>
+      <td class="cell-asor readonly"><input data-field="asor" value="${data.asor||''}" readonly /></td>
+      <td class="cell-sup readonly"><input data-field="supervision" value="${data.supervision||''}" readonly /></td>
+      <td class="row-actions">
+        <button class="btn-row btn-edit" title="Edit row">Edit</button>
+        <button class="btn-row btn-save" style="display:none" title="Save changes">Save</button>
+        <button class="btn-row btn-del" title="Delete row">Delete</button>
+      </td>`;
+
     body.appendChild(tr);
-    tr.querySelector('.delBtn').addEventListener('click', ()=> tr.remove());
+
+    // wire up row buttons
+    const btnEdit = tr.querySelector('.btn-edit');
+    const btnSave = tr.querySelector('.btn-save');
+    const btnDel  = tr.querySelector('.btn-del');
+
+    // make inputs easier to get
+    const inputs = tr.querySelectorAll('input[data-field]');
+
+    // Edit: enable inputs for this row only
+    btnEdit.addEventListener('click', () => {
+      // set row to editable style
+      tr.classList.remove('readonly'); tr.classList.add('editable');
+      // make inputs editable
+      inputs.forEach(inp => { inp.removeAttribute('readonly'); inp.focus(); });
+      btnEdit.style.display = 'none';
+      btnSave.style.display = 'inline-block';
+    });
+
+    // Save: collect values and write single doc to server
+    btnSave.addEventListener('click', async () => {
+      // gather values
+      const obj = {};
+      inputs.forEach(inp => obj[inp.getAttribute('data-field')] = inp.value);
+      // basic validation: depotName required
+      if(!(obj.depotName || '').trim()){ showToast('Depot Name required', 'error'); return; }
+      // optimistic UI: mark row as saving
+      tr.style.opacity = '0.6';
+      showToast('Saving row…', 'info', 2000);
+      try{
+        const newId = await updateSORRow(id, obj);
+        // if this was a new created id (shouldn't happen here, existing row), ensure dataset id is set
+        tr.dataset.id = newId;
+        showToast('Row saved', 'success');
+      }catch(e){
+        console.error(e);
+        showToast('Save failed: ' + (e.message || 'network error'), 'error', 4000);
+      }finally{
+        tr.style.opacity = '';
+        // switch back to readonly
+        inputs.forEach(inp => inp.setAttribute('readonly','true'));
+        tr.classList.remove('editable'); tr.classList.add('readonly');
+        btnEdit.style.display = 'inline-block';
+        btnSave.style.display = 'none';
+      }
+    });
+
+    // Delete: remove doc from server (ask confirm)
+    btnDel.addEventListener('click', async ()=>{
+      if(!confirm('Delete this depot permanently?')) return;
+      try{
+        await db.collection('sor').doc(id).delete();
+        showToast('Depot deleted', 'success');
+      }catch(e){ console.error(e); showToast('Delete failed', 'error'); }
+    });
   });
 }
 
-/* Add a blank row for new depot */
+/* Add blank row (editable) - not coming from server yet */
 function addBlankRow(){
-  const body=document.getElementById('sorBody');
-  const tr=document.createElement('tr');
-  tr.innerHTML = `<td><input data-field="depotName" value="" /></td>
-    <td><input data-field="agency" value="" /></td>
-    <td><input data-field="unloading" value="" /></td>
-    <td><input data-field="receipt10" value="" /></td>
-    <td><input data-field="receipt16" value="" /></td>
-    <td><input data-field="receipt20" value="" /></td>
-    <td><input data-field="receiptBeyond" value="" /></td>
-    <td><input data-field="issues" value="" /></td>
-    <td><input data-field="transportation" value="" /></td>
-    <td><input data-field="asor" value="" /></td>
-    <td><input data-field="supervision" value="" /></td>
-    <td><button class="delBtn">Delete</button></td>`;
+  const body = document.getElementById('sorBody');
+  const tr = document.createElement('tr');
+  tr.dataset.id = ''; // no id yet
+  tr.classList.add('editable');
+  tr.innerHTML = `<td class="cell-depot"><input data-field="depotName" value="" /></td>
+    <td class="cell-agency"><input data-field="agency" value="" /></td>
+    <td class="cell-unloading"><input data-field="unloading" value="" /></td>
+    <td class="cell-r10"><input data-field="receipt10" value="" /></td>
+    <td class="cell-r16"><input data-field="receipt16" value="" /></td>
+    <td class="cell-r20"><input data-field="receipt20" value="" /></td>
+    <td class="cell-b20"><input data-field="receiptBeyond" value="" /></td>
+    <td class="cell-issues"><input data-field="issues" value="" /></td>
+    <td class="cell-trans"><input data-field="transportation" value="" /></td>
+    <td class="cell-asor"><input data-field="asor" value="" /></td>
+    <td class="cell-sup"><input data-field="supervision" value="" /></td>
+    <td class="row-actions">
+      <button class="btn-row btn-save" title="Save new row">Save</button>
+      <button class="btn-row btn-del" title="Delete row">Delete</button>
+    </td>`;
   body.prepend(tr);
-  tr.querySelector('.delBtn').addEventListener('click', ()=> tr.remove());
+
+  const btnSave = tr.querySelector('.btn-save');
+  const btnDel  = tr.querySelector('.btn-del');
+  const inputs = tr.querySelectorAll('input[data-field]');
+
+  // Save new row (create doc)
+  btnSave.addEventListener('click', async ()=>{
+    const obj = {};
+    inputs.forEach(inp => obj[inp.getAttribute('data-field')] = inp.value);
+    if(!(obj.depotName||'').trim()){ showToast('Depot Name required', 'error'); return; }
+    tr.style.opacity = '0.6';
+    showToast('Creating depot…', 'info', 2000);
+    try{
+      const ref = await db.collection('sor').add(obj);
+      showToast('Depot created', 'success');
+      // set dataset id and convert to readonly row
+      tr.dataset.id = ref.id;
+      inputs.forEach(inp => inp.setAttribute('readonly','true'));
+      tr.classList.remove('editable'); tr.classList.add('readonly');
+      // replace Save button with Edit + Delete
+      const actionCell = tr.querySelector('.row-actions');
+      actionCell.innerHTML = '';
+      const btnEdit = document.createElement('button'); btnEdit.className='btn-row btn-edit'; btnEdit.textContent='Edit';
+      const btnSave2 = document.createElement('button'); btnSave2.className='btn-row btn-save'; btnSave2.style.display='none'; btnSave2.textContent='Save';
+      const btnDel2 = document.createElement('button'); btnDel2.className='btn-row btn-del'; btnDel2.textContent='Delete';
+      actionCell.appendChild(btnEdit); actionCell.appendChild(btnSave2); actionCell.appendChild(btnDel2);
+      // wire events similar to existing rows
+      btnEdit.addEventListener('click', ()=>{
+        tr.classList.remove('readonly'); tr.classList.add('editable');
+        inputs.forEach(inp => { inp.removeAttribute('readonly'); inp.focus(); });
+        btnEdit.style.display='none'; btnSave2.style.display='inline-block';
+      });
+      btnSave2.addEventListener('click', async ()=>{
+        const obj2 = {}; inputs.forEach(inp => obj2[inp.getAttribute('data-field')] = inp.value);
+        if(!(obj2.depotName||'').trim()){ showToast('Depot Name required', 'error'); return; }
+        tr.style.opacity = '0.6';
+        showToast('Saving row…', 'info', 2000);
+        try{
+          await db.collection('sor').doc(ref.id).set(obj2, {merge:true});
+          showToast('Row saved', 'success');
+        }catch(e){ console.error(e); showToast('Save failed', 'error'); }
+        tr.style.opacity=''; inputs.forEach(inp => inp.setAttribute('readonly','true')); tr.classList.remove('editable'); tr.classList.add('readonly');
+        btnEdit.style.display='inline-block'; btnSave2.style.display='none';
+      });
+      btnDel2.addEventListener('click', async ()=>{
+        if(!confirm('Delete this depot permanently?')) return;
+        try{ await db.collection('sor').doc(ref.id).delete(); showToast('Depot deleted', 'success'); }catch(e){ showToast('Delete failed', 'error'); }
+      });
+    }catch(e){
+      console.error(e); showToast('Create failed: ' + (e.message || 'network error'), 'error');
+      tr.style.opacity='';
+    }
+  });
+
+  // Delete blank row (client-side) before it is saved
+  btnDel.addEventListener('click', ()=>{
+    if(!confirm('Remove this new row?')) return;
+    tr.remove();
+  });
 }
 
-/* Optimistic Save All: replace server collection with current UI rows.
-   Implementation: immediately show a saving toast, perform server replace batch,
-   on success show success toast; on failure show error (UI table unchanged)
-*/
+/* Save all table rows (replace collection) - keep for bulk updates */
 async function saveAll(){
   const rows = Array.from(document.querySelectorAll('#sorBody tr'));
   const out = [];
@@ -141,34 +306,21 @@ async function saveAll(){
     if((obj.depotName||'').trim()) out.push(obj);
   });
   if(out.length===0){ showToast('Nothing to save', 'info'); return; }
-  showToast('Saving SOR to server…', 'info', 3000);
+  showToast('Saving all SOR to server…', 'info', 2000);
   try{
-    // delete existing then add new
-    const col = db.collection('sor');
-    const existing = await col.get();
-    const batch = db.batch();
-    existing.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-    const batch2 = db.batch();
-    out.forEach(item=>{
-      const ref = col.doc();
-      batch2.set(ref, item);
-    });
-    await batch2.commit();
-    showToast('SOR saved to server', 'success');
+    await saveAllToServer(out);
+    showToast('All SOR saved', 'success');
   }catch(e){
-    console.error(e);
-    showToast('Save failed: ' + (e.message||'network error'), 'error', 5000);
+    console.error(e); showToast('Save All failed: ' + (e.message||'network error'), 'error');
   }
 }
 
-/* Realtime listener: render when collection changes */
+/* Realtime: listen to sor collection and render rows */
 let sorUnsub = null;
 function startSorRealtime(){
   if(sorUnsub) sorUnsub();
   sorUnsub = db.collection('sor').orderBy('depotName').onSnapshot(snapshot => {
     renderSORFromDocs(snapshot.docs);
-    showToast('SOR updated', 'info', 1200);
   }, err => { console.error('sor onSnapshot err', err); showToast('Realtime SOR error', 'error'); });
 }
 
