@@ -10,7 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <script>
-// Firebase config (same)
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyBB8E1qDOs2rNr84xrlOoMWWZLtXXjZZbk",
   authDomain: "contract-bills.firebaseapp.com",
@@ -77,16 +77,10 @@ const db = firebase.firestore();
 <script>
 function amountDisplay(v){ const n = Number(String(v||0).replace(/,/g,'')); return isFinite(n)?n.toFixed(2):'0.00'; }
 function fmtDate(iso){ if(!iso) return '—'; try { return new Date(iso).toLocaleString(); } catch(e){ return iso; } }
+function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-async function fetchBillsFromServer(){
-  const snap = await db.collection('bills').orderBy('savedAt','desc').get();
-  const arr = [];
-  snap.forEach(doc => { const d = doc.data(); d._id = doc.id; arr.push(d); });
-  return arr;
-}
-
-async function renderList(){
-  const all = await fetchBillsFromServer();
+/* Render list from array */
+function renderFromArray(all){
   const q = (document.getElementById('searchText').value || '').toLowerCase().trim();
   const body = document.getElementById('billsBody');
   body.innerHTML = '';
@@ -111,11 +105,30 @@ async function renderList(){
   });
 }
 
-function escapeHtml(s){ if(s==null) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* Realtime: subscribe to bills with onSnapshot and render from snapshot */
+let billsUnsub = null;
+function startBillsRealtime(){
+  if(billsUnsub) billsUnsub();
+  billsUnsub = db.collection('bills').orderBy('savedAt','desc').onSnapshot(snapshot=>{
+    const arr = [];
+    snapshot.forEach(doc => { const d=doc.data(); d._id = doc.id; arr.push(d); });
+    renderFromArray(arr);
+  }, err => console.error('bills onSnapshot err', err));
+}
 
-document.getElementById('searchText').addEventListener('input', renderList);
+/* Export helpers */
+async function exportAllJson(){ const snap = await db.collection('bills').orderBy('savedAt','desc').get(); const arr = []; snap.forEach(doc => { const d=doc.data(); d._id=doc.id; arr.push(d); }); return arr; }
+
+document.getElementById('searchText').addEventListener('input', ()=>{
+  // quick re-render by fetching snapshot once (or rely on last snapshot)
+  // easier: just fetch current docs and render
+  db.collection('bills').orderBy('savedAt','desc').get().then(snap => {
+    const arr=[]; snap.forEach(doc=>{ const d=doc.data(); d._id=doc.id; arr.push(d); }); renderFromArray(arr);
+  });
+});
+
 document.getElementById('exportCsv').addEventListener('click', async ()=>{
-  const arr = await fetchBillsFromServer();
+  const arr = await exportAllJson();
   if(!arr.length){ alert('No bills to export'); return; }
   const keys = Array.from(new Set(arr.flatMap(o => Object.keys(o)))).sort();
   const header = keys.join(',');
@@ -125,18 +138,19 @@ document.getElementById('exportCsv').addEventListener('click', async ()=>{
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'bills_export.csv'; a.click(); URL.revokeObjectURL(url);
 });
+
 document.getElementById('exportJson').addEventListener('click', async ()=>{
-  const arr = await fetchBillsFromServer();
+  const arr = await exportAllJson();
   if(!arr.length){ alert('No bills to export'); return; }
   const blob = new Blob([JSON.stringify(arr, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = 'bills_export.json'; a.click(); URL.revokeObjectURL(url);
 });
 
-document.addEventListener('DOMContentLoaded', renderList);
-
-// Realtime update: refresh when the remote collection changes
-db.collection('bills').onSnapshot(() => { renderList(); });
+/* Start realtime on DOM ready */
+document.addEventListener('DOMContentLoaded', ()=>{
+  startBillsRealtime();
+});
 </script>
 </body>
 </html>
